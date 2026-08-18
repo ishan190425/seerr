@@ -10,7 +10,7 @@ export interface SettingsContextProps {
 
 const defaultSettings = {
   initialized: false,
-  applicationTitle: 'Seerr',
+  applicationTitle: 'Rathi Studios',
   applicationUrl: '',
   hideAvailable: false,
   hideBlocklisted: false,

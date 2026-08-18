@@ -12,7 +12,7 @@ import { Permission, useUser } from '@app/hooks/useUser';
 import '@app/styles/globals.css';
 import { polyfillIntl } from '@app/utils/polyfillIntl';
 import { getHostAndPort } from '@app/utils/urlHelper';
-import '@fontsource-variable/inter';
+import '@fontsource-variable/archivo';
 import { MediaServerType } from '@server/constants/server';
 import type { PublicSettingsResponse } from '@server/interfaces/api/settingsInterfaces';
 import type { AvailableLocale } from '@server/types/languages';

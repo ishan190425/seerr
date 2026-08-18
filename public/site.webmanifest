@@ -1,6 +1,6 @@
 {
-  "name": "Seerr",
-  "short_name": "Seerr",
+  "name": "Rathi Studios",
+  "short_name": "Rathi",
   "start_url": "./",
   "icons": [
     {
@@ -28,8 +28,8 @@
       "purpose": "maskable"
     }
   ],
-  "theme_color": "#1f2937",
-  "background_color": "#1f2937",
+  "theme_color": "#0a0a0e",
+  "background_color": "#0a0a0e",
   "display": "standalone",
   "shortcuts": [
     {

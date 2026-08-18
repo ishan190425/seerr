@@ -406,7 +406,7 @@ class Settings {
       vapidPublic: '',
       main: {
         apiKey: '',
-        applicationTitle: 'Seerr',
+        applicationTitle: 'Rathi Studios',
         applicationUrl: '',
         cacheImages: false,
         defaultPermissions: Permission.REQUEST,
