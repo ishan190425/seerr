@@ -3,6 +3,8 @@
   "component.BlocklistBlock.blocklistedby": "Blocklisted By",
   "component.BlocklistModal.blocklisting": "Blocklisting",
   "components.Activity.activity": "Activity",
+  "components.Activity.allusers": "ALL",
+  "components.Activity.episodecount": "{count, plural, one {# EP} other {# EPS}}",
   "components.Activity.freshartivals": "Fresh Arrivals",
   "components.Activity.minutesleft": "{minutes} min left",
   "components.Activity.noscreens": "Nothing playing right now",

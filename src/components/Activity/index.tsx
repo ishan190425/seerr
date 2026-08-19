@@ -10,6 +10,7 @@ import type {
   ActivityHistoryItem,
   ActivitySession,
 } from '@server/routes/activity';
+import { useState } from 'react';
 import { useIntl } from 'react-intl';
 import useSWR from 'swr';
 
@@ -24,6 +25,8 @@ const messages = defineMessages('components.Activity', {
   minutesleft: '{minutes} min left',
   paused: 'PAUSED',
   recentlywatched: 'Recently Watched',
+  allusers: 'ALL',
+  episodecount: '{count, plural, one {# EP} other {# EPS}}',
 });
 
 const formatProgress = (session: ActivitySession) => {
@@ -53,6 +56,49 @@ const formatAddedAt = (addedAt: number) => {
   return added
     .toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     .toUpperCase();
+};
+
+interface HistoryGroup {
+  title: string;
+  kind: string;
+  thumb?: string;
+  count: number;
+  users: string[];
+  latest?: string;
+  lastViewedAt: number;
+}
+
+const historyUsers = (history: ActivityHistoryItem[]): string[] =>
+  [...new Set(history.map((item) => item.user))].sort();
+
+const groupHistory = (
+  history: ActivityHistoryItem[],
+  user: string | null
+): HistoryGroup[] => {
+  const groups = new Map<string, HistoryGroup>();
+  for (const item of history) {
+    if (user && item.user !== user) {
+      continue;
+    }
+    const existing = groups.get(item.title);
+    if (existing) {
+      existing.count += 1;
+      if (!existing.users.includes(item.user)) {
+        existing.users.push(item.user);
+      }
+    } else {
+      groups.set(item.title, {
+        title: item.title,
+        kind: item.kind,
+        thumb: item.thumb,
+        count: 1,
+        users: [item.user],
+        latest: item.subtitle,
+        lastViewedAt: item.viewedAt,
+      });
+    }
+  }
+  return [...groups.values()];
 };
 
 const formatWatchedAt = (viewedAt: number) => {
@@ -93,6 +139,7 @@ const Activity = () => {
     '/api/v1/activity/history',
     { refreshInterval: 60000 }
   );
+  const [historyUser, setHistoryUser] = useState<string | null>(null);
 
   if (!hasPermission(Permission.ADMIN)) {
     return <Error statusCode={403} />;
@@ -284,41 +331,74 @@ const Activity = () => {
       {!historyData ? (
         <LoadingSpinner />
       ) : (
-        <div className="mb-8 flex flex-col gap-3">
-          {historyData.history.map((item, index) => (
-            <div
-              key={`history-${index}`}
-              className="flex items-center gap-4 rounded-xl border border-gray-700 bg-gray-800 p-3"
+        <>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              onClick={() => setHistoryUser(null)}
+              className={`rounded-full px-4 py-1.5 text-[11px] font-bold tracking-widest transition ${
+                historyUser === null
+                  ? 'bg-indigo-600 text-white'
+                  : 'border border-gray-700 text-gray-400 hover:text-gray-200'
+              }`}
             >
-              <div className="h-16 w-11 flex-shrink-0 overflow-hidden rounded bg-gray-700">
-                {item.thumb && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={`/api/v1/activity/image?path=${encodeURIComponent(
-                      item.thumb
-                    )}`}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                )}
-              </div>
-              <div className="flex min-w-0 flex-grow flex-col gap-0.5">
-                <div className="truncate text-sm text-gray-100">
-                  <span className="font-bold">{item.user}</span> watched{' '}
-                  <span className="font-bold">{item.title}</span>
-                </div>
-                {item.subtitle && (
-                  <div className="truncate text-xs text-gray-400">
-                    {item.subtitle}
+              {intl.formatMessage(messages.allusers)}
+            </button>
+            {historyUsers(historyData.history).map((user) => (
+              <button
+                key={`history-user-${user}`}
+                onClick={() => setHistoryUser(user)}
+                className={`rounded-full px-4 py-1.5 text-[11px] font-bold tracking-widest transition ${
+                  historyUser === user
+                    ? 'bg-indigo-600 text-white'
+                    : 'border border-gray-700 text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {user.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <div className="mb-8 flex flex-wrap gap-4">
+            {groupHistory(historyData.history, historyUser).map(
+              (group, index) => (
+                <div
+                  key={`history-group-${index}`}
+                  className="flex w-36 flex-col gap-1.5"
+                >
+                  <div className="relative aspect-[2/3] w-36 overflow-hidden rounded-lg border border-gray-700 bg-gray-800">
+                    {group.thumb && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`/api/v1/activity/image?path=${encodeURIComponent(
+                          group.thumb
+                        )}`}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                    {group.kind === 'episode' && (
+                      <div className="absolute left-1.5 top-1.5 rounded-full bg-gray-900/85 px-2 py-0.5 text-[10px] font-bold tracking-wider text-indigo-400">
+                        {intl.formatMessage(messages.episodecount, {
+                          count: group.count,
+                        })}
+                      </div>
+                    )}
+                    <div className="absolute bottom-1.5 left-1.5 rounded-full bg-gray-900/85 px-2 py-0.5 text-[10px] font-bold tracking-wider text-gray-300">
+                      {formatWatchedAt(group.lastViewedAt)}
+                    </div>
                   </div>
-                )}
-              </div>
-              <div className="flex-shrink-0 text-xs text-gray-400">
-                {formatWatchedAt(item.viewedAt)}
-              </div>
-            </div>
-          ))}
-        </div>
+                  <div className="truncate text-sm font-semibold text-gray-100">
+                    {group.title}
+                  </div>
+                  <div className="truncate text-xs text-gray-400">
+                    {historyUser === null
+                      ? group.users.join(' · ')
+                      : group.latest}
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        </>
       )}
     </>
   );

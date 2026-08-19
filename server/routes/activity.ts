@@ -402,7 +402,7 @@ activityRoutes.get('/history', async (req, res) => {
     }
 
     const [rawHistory, accounts] = await Promise.all([
-      plex.plexClient.getWatchHistory(20),
+      plex.plexClient.getWatchHistory(60),
       plex.plexClient.getServerAccounts().catch(() => new Map<number, string>()),
     ]);
 
