@@ -190,23 +190,33 @@ app
       }
     });
     if (settings.network.csrfProtection) {
-      server.use(
-        csurf({
-          cookie: {
-            httpOnly: true,
-            sameSite: true,
-            secure: !dev,
-            key: '_csrf',
-            path: '/',
-          },
-        })
-      );
-      server.use((req, res, next) => {
-        res.cookie('XSRF-TOKEN', req.csrfToken(), {
+      const csrfMiddleware = csurf({
+        cookie: {
+          httpOnly: true,
           sameSite: true,
           secure: !dev,
+          key: '_csrf',
+          path: '/',
+        },
+      });
+      // Rathi Studios: requests authenticated with the API key are exempt
+      // from CSRF — cross-site attackers cannot set custom headers, and CSRF
+      // only protects cookie-based sessions. This lets scripts/agents use
+      // the API over plain HTTP on localhost.
+      server.use((req, res, next) => {
+        if (
+          req.headers['x-api-key'] &&
+          req.headers['x-api-key'] === getSettings().main.apiKey
+        ) {
+          return next();
+        }
+        return csrfMiddleware(req, res, () => {
+          res.cookie('XSRF-TOKEN', req.csrfToken(), {
+            sameSite: true,
+            secure: !dev,
+          });
+          next();
         });
-        next();
       });
     }
 
