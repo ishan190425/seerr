@@ -280,13 +280,13 @@ const Activity = () => {
           {intl.formatMessage(messages.pipelineempty)}
         </div>
       ) : (
-        <div className="mb-6 flex flex-col gap-3">
+        <div className="mb-6 flex flex-wrap gap-4">
           {downloadData.downloads.map((download, index) => (
             <div
               key={`download-${index}`}
-              className="flex items-center gap-4 rounded-xl border border-gray-700 bg-gray-800 p-4"
+              className="flex w-36 flex-col gap-1.5"
             >
-              <div className="h-24 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-700">
+              <div className="relative aspect-[2/3] w-36 overflow-hidden rounded-lg border border-gray-700 bg-gray-800">
                 {download.posterUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -295,28 +295,23 @@ const Activity = () => {
                     className="h-full w-full object-cover"
                   />
                 )}
-              </div>
-              <div className="flex min-w-0 flex-grow flex-col gap-2">
-                <div className="flex items-baseline gap-2 truncate">
-                  <span className="truncate text-base font-bold text-gray-100">
-                    {download.title}
-                  </span>
-                  {download.subtitle && (
-                    <span className="truncate text-sm text-gray-400">
-                      {download.subtitle}
-                    </span>
-                  )}
+                <div className="absolute left-1.5 top-1.5 rounded-full bg-gray-900/85 px-2 py-0.5 text-[10px] font-bold tracking-wider text-indigo-400">
+                  {Math.round(download.progress)}%
                 </div>
-                <div className="h-1.5 w-full rounded-full bg-gray-700">
+                <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-gray-900/70">
                   <div
-                    className="h-1.5 rounded-full bg-indigo-600"
+                    className="h-1.5 bg-indigo-600"
                     style={{ width: `${download.progress}%` }}
                   />
                 </div>
-                <div className="text-xs text-gray-400">
-                  {download.progress}% · {formatSpeed(download.speed)}
-                  {download.eta > 0 && <> · {formatEta(download.eta)}</>}
-                </div>
+              </div>
+              <div className="truncate text-sm font-semibold text-gray-100">
+                {download.title}
+              </div>
+              <div className="truncate text-xs text-gray-400">
+                {download.subtitle ? `${download.subtitle} · ` : ''}
+                {formatSpeed(download.speed)}
+                {download.eta > 0 ? ` · ${formatEta(download.eta)}` : ''}
               </div>
             </div>
           ))}
