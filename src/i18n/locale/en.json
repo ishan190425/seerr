@@ -9,7 +9,7 @@
   "components.Activity.nowshowing": "Now Showing",
   "components.Activity.paused": "PAUSED",
   "components.Activity.pipeline": "In the Pipeline",
-  "components.Activity.pipelineempty": "Nothing downloading or searching",
+  "components.Activity.pipelineempty": "Nothing downloading right now",
   "components.Activity.screenslive": "{count, plural, one {# screen live} other {# screens live}}",
   "components.AirDateBadge.airedrelative": "Aired {relativeTime}",
   "components.AirDateBadge.airsrelative": "Airing {relativeTime}",

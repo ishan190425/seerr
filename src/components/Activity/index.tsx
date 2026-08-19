@@ -1,14 +1,15 @@
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
-import RequestItem from '@app/components/RequestList/RequestItem';
 import Slider from '@app/components/Slider';
 import TmdbTitleCard from '@app/components/TitleCard/TmdbTitleCard';
 import { Permission, useUser } from '@app/hooks/useUser';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
 import type { MediaResultsResponse } from '@server/interfaces/api/mediaInterfaces';
-import type { RequestResultsResponse } from '@server/interfaces/api/requestInterfaces';
-import type { ActivitySession } from '@server/routes/activity';
+import type {
+  ActivityDownload,
+  ActivitySession,
+} from '@server/routes/activity';
 import { useIntl } from 'react-intl';
 import useSWR from 'swr';
 
@@ -19,7 +20,7 @@ const messages = defineMessages('components.Activity', {
   noscreens: 'Nothing playing right now',
   freshartivals: 'Fresh Arrivals',
   pipeline: 'In the Pipeline',
-  pipelineempty: 'Nothing downloading or searching',
+  pipelineempty: 'Nothing downloading right now',
   minutesleft: '{minutes} min left',
   paused: 'PAUSED',
 });
@@ -33,6 +34,16 @@ const formatProgress = (session: ActivitySession) => {
 
 const minutesLeft = (session: ActivitySession) =>
   Math.max(0, Math.round((session.duration - session.viewOffset) / 60000));
+
+const formatSpeed = (bytesPerSecond: number) =>
+  bytesPerSecond >= 1_000_000
+    ? `${(bytesPerSecond / 1_000_000).toFixed(1)} MB/s`
+    : `${Math.round(bytesPerSecond / 1000)} kB/s`;
+
+const formatEta = (seconds: number) =>
+  seconds >= 3600
+    ? `${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m left`
+    : `${Math.max(1, Math.round(seconds / 60))} min left`;
 
 const Activity = () => {
   const intl = useIntl();
@@ -48,11 +59,10 @@ const Activity = () => {
     { revalidateOnMount: true }
   );
 
-  const { data: pipeline, mutate: revalidatePipeline } =
-    useSWR<RequestResultsResponse>(
-      '/api/v1/request?filter=processing&take=10&sort=modified',
-      { refreshInterval: 30000 }
-    );
+  const { data: downloadData } = useSWR<{ downloads: ActivityDownload[] }>(
+    '/api/v1/activity/downloads',
+    { refreshInterval: 15000 }
+  );
 
   if (!hasPermission(Permission.ADMIN)) {
     return <Error statusCode={403} />;
@@ -151,20 +161,33 @@ const Activity = () => {
           <span>{intl.formatMessage(messages.pipeline)}</span>
         </div>
       </div>
-      {!pipeline ? (
+      {!downloadData ? (
         <LoadingSpinner />
-      ) : pipeline.results.length === 0 ? (
+      ) : downloadData.downloads.length === 0 ? (
         <div className="mb-6 text-sm text-gray-400">
           {intl.formatMessage(messages.pipelineempty)}
         </div>
       ) : (
-        <div className="mb-6 flex flex-col gap-4">
-          {pipeline.results.map((request) => (
-            <RequestItem
-              key={`pipeline-${request.id}`}
-              request={request}
-              revalidateList={() => revalidatePipeline()}
-            />
+        <div className="mb-6 flex flex-col gap-3">
+          {downloadData.downloads.map((download, index) => (
+            <div
+              key={`download-${index}`}
+              className="flex flex-col gap-2 rounded-xl border border-gray-700 bg-gray-800 p-4"
+            >
+              <div className="truncate text-sm font-semibold text-gray-100">
+                {download.name}
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-gray-700">
+                <div
+                  className="h-1.5 rounded-full bg-indigo-600"
+                  style={{ width: `${download.progress}%` }}
+                />
+              </div>
+              <div className="text-xs text-gray-400">
+                {download.progress}% · {formatSpeed(download.speed)}
+                {download.eta > 0 && <> · {formatEta(download.eta)}</>}
+              </div>
+            </div>
           ))}
         </div>
       )}

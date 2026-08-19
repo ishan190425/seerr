@@ -2186,6 +2186,35 @@ paths:
                           type: number
                         viewOffset:
                           type: number
+  /activity/downloads:
+    get:
+      summary: Get active Transmission downloads (admin only)
+      description: Returns torrents actively downloading in Transmission for the Activity dashboard.
+      tags:
+        - activity
+      responses:
+        '200':
+          description: Active downloads
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  downloads:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        progress:
+                          type: number
+                        speed:
+                          type: number
+                        eta:
+                          type: number
+                        size:
+                          type: number
   /status:
     get:
       summary: Get Seerr status
