@@ -3,7 +3,6 @@ import Badge from '@app/components/Common/Badge';
 import CachedImage from '@app/components/Common/CachedImage';
 import Modal from '@app/components/Common/Modal';
 import type { RequestOverrides } from '@app/components/RequestModal/AdvancedRequester';
-import AdvancedRequester from '@app/components/RequestModal/AdvancedRequester';
 import QuotaDisplay from '@app/components/RequestModal/QuotaDisplay';
 import useToasts from '@app/hooks/useToasts';
 import { useUser } from '@app/hooks/useUser';
@@ -517,17 +516,7 @@ const CollectionRequestModal = ({
           </div>
         </div>
       </div>
-      {(hasPermission(Permission.REQUEST_ADVANCED) ||
-        hasPermission(Permission.MANAGE_REQUESTS)) && (
-        <AdvancedRequester
-          type="movie"
-          is4k={is4k}
-          onChange={(overrides) => {
-            setRequestOverrides(overrides);
-          }}
-        />
-      )}
-    </Modal>
+          </Modal>
   );
 };
 

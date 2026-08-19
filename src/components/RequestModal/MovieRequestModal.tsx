@@ -1,7 +1,6 @@
 import Alert from '@app/components/Common/Alert';
 import Modal from '@app/components/Common/Modal';
 import type { RequestOverrides } from '@app/components/RequestModal/AdvancedRequester';
-import AdvancedRequester from '@app/components/RequestModal/AdvancedRequester';
 import QuotaDisplay from '@app/components/RequestModal/QuotaDisplay';
 import useToasts from '@app/hooks/useToasts';
 import { useUser } from '@app/hooks/useUser';
@@ -285,24 +284,7 @@ const MovieRequestModal = ({
           : intl.formatMessage(messages.requestfrom, {
               username: editRequest.requestedBy.displayName,
             })}
-        {(hasPermission(Permission.REQUEST_ADVANCED) ||
-          hasPermission(Permission.MANAGE_REQUESTS)) && (
-          <AdvancedRequester
-            type="movie"
-            is4k={is4k}
-            requestUser={editRequest.requestedBy}
-            defaultOverrides={{
-              folder: editRequest.rootFolder,
-              profile: editRequest.profileId,
-              server: editRequest.serverId,
-              tags: editRequest.tags,
-            }}
-            onChange={(overrides) => {
-              setRequestOverrides(overrides);
-            }}
-          />
-        )}
-      </Modal>
+              </Modal>
     );
   }
 
@@ -358,18 +340,7 @@ const MovieRequestModal = ({
           }
         />
       )}
-      {(hasPermission(Permission.REQUEST_ADVANCED) ||
-        hasPermission(Permission.MANAGE_REQUESTS)) && (
-        <AdvancedRequester
-          type="movie"
-          is4k={is4k}
-          quota={quota}
-          onChange={(overrides) => {
-            setRequestOverrides(overrides);
-          }}
-        />
-      )}
-    </Modal>
+          </Modal>
   );
 };
 

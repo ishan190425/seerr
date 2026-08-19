@@ -2,7 +2,6 @@ import Alert from '@app/components/Common/Alert';
 import Badge from '@app/components/Common/Badge';
 import Modal from '@app/components/Common/Modal';
 import type { RequestOverrides } from '@app/components/RequestModal/AdvancedRequester';
-import AdvancedRequester from '@app/components/RequestModal/AdvancedRequester';
 import QuotaDisplay from '@app/components/RequestModal/QuotaDisplay';
 import SearchByNameModal from '@app/components/RequestModal/SearchByNameModal';
 import useSettings from '@app/hooks/useSettings';
@@ -714,31 +713,7 @@ const TvRequestModal = ({
           </div>
         </div>
       </div>
-      {(hasPermission(Permission.REQUEST_ADVANCED) ||
-        hasPermission(Permission.MANAGE_REQUESTS)) && (
-        <AdvancedRequester
-          type="tv"
-          is4k={is4k}
-          isAnime={data?.keywords.some(
-            (keyword) => keyword.id === ANIME_KEYWORD_ID
-          )}
-          quota={quota}
-          onChange={(overrides) => setRequestOverrides(overrides)}
-          requestUser={editRequest?.requestedBy}
-          defaultOverrides={
-            editRequest
-              ? {
-                  folder: editRequest.rootFolder,
-                  profile: editRequest.profileId,
-                  server: editRequest.serverId,
-                  language: editRequest.languageProfileId,
-                  tags: editRequest.tags,
-                }
-              : undefined
-          }
-        />
-      )}
-    </Modal>
+          </Modal>
   );
 };
 
