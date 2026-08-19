@@ -235,10 +235,10 @@ export class MediaRequest {
       }
     }
 
-    // Apply overrides if the user is not an admin or has the "advanced request" permission
-    const useOverrides = !user.hasPermission([Permission.MANAGE_REQUESTS], {
-      type: 'or',
-    });
+    // Rathi Studios: the Advanced requester UI is removed, so override rules
+    // (e.g. Hindi originals -> "Best Quality - Hindi") apply to every request,
+    // admins included. Upstream skipped them for MANAGE_REQUESTS users.
+    const useOverrides = true;
 
     let rootFolder = requestBody.rootFolder;
     let profileId = requestBody.profileId;
