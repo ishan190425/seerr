@@ -241,6 +241,42 @@ class PlexAPI extends ExternalAPI {
 
     return response.MediaContainer.Metadata;
   }
+
+  public async getSessions(): Promise<PlexSessionMetadata[]> {
+    // ttl 0 disables caching — sessions are polled live by the activity page
+    const response = await this.get<PlexSessionsResponse>(
+      '/status/sessions',
+      undefined,
+      0
+    );
+
+    return response.MediaContainer.Metadata ?? [];
+  }
+}
+
+export interface PlexSessionMetadata {
+  type: string;
+  title: string;
+  grandparentTitle?: string;
+  parentIndex?: number;
+  index?: number;
+  year?: number;
+  duration?: number;
+  viewOffset?: number;
+  User?: { title: string };
+  Player?: {
+    product?: string;
+    title?: string;
+    device?: string;
+    state?: string;
+  };
+}
+
+interface PlexSessionsResponse {
+  MediaContainer: {
+    size: number;
+    Metadata?: PlexSessionMetadata[];
+  };
 }
 
 export default PlexAPI;

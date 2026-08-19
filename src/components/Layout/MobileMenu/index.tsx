@@ -13,6 +13,7 @@ import {
   SparklesIcon,
   TvIcon,
   UsersIcon,
+  SignalIcon,
 } from '@heroicons/react/24/outline';
 import {
   ClockIcon as FilledClockIcon,
@@ -24,6 +25,7 @@ import {
   TvIcon as FilledTvIcon,
   UsersIcon as FilledUsersIcon,
   XMarkIcon,
+  SignalIcon as FilledSignalIcon,
 } from '@heroicons/react/24/solid';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -98,6 +100,14 @@ const MobileMenu = ({
       svgIcon: <ClockIcon className="h-6 w-6" />,
       svgIconSelected: <FilledClockIcon className="h-6 w-6" />,
       activeRegExp: /^\/requests/,
+    },
+    {
+      href: '/activity',
+      content: intl.formatMessage(menuMessages.activity),
+      svgIcon: <SignalIcon className="h-6 w-6" />,
+      svgIconSelected: <FilledSignalIcon className="h-6 w-6" />,
+      activeRegExp: /^\/activity/,
+      requiredPermission: Permission.ADMIN,
     },
     {
       href: '/blocklist',
