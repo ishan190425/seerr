@@ -211,6 +211,12 @@ const Discover = () => {
       {(isEditing ? sliders : discoverData)?.map((slider, index) => {
         let sliderComponent: React.ReactNode;
 
+        // Rathi Studios: the Requests tab already covers this; keep it off
+        // the homepage entirely.
+        if (slider.type === DiscoverSliderType.RECENT_REQUESTS) {
+          return null;
+        }
+
         switch (slider.type) {
           case DiscoverSliderType.RECENTLY_ADDED:
             sliderComponent = <RecentlyAddedSlider />;
