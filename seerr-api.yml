@@ -2151,6 +2151,41 @@ components:
       name: X-Api-Key
 
 paths:
+  /activity/sessions:
+    get:
+      summary: Get live Plex sessions (admin only)
+      description: Returns currently playing Plex sessions for the Activity dashboard.
+      tags:
+        - activity
+      responses:
+        '200':
+          description: Live sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        title:
+                          type: string
+                        subtitle:
+                          type: string
+                        mediaType:
+                          type: string
+                        user:
+                          type: string
+                        player:
+                          type: string
+                        state:
+                          type: string
+                        duration:
+                          type: number
+                        viewOffset:
+                          type: number
   /status:
     get:
       summary: Get Seerr status
