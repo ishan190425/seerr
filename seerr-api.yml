@@ -2207,6 +2207,12 @@ paths:
                       properties:
                         name:
                           type: string
+                        title:
+                          type: string
+                        subtitle:
+                          type: string
+                        posterUrl:
+                          type: string
                         progress:
                           type: number
                         speed:
@@ -2215,6 +2221,55 @@ paths:
                           type: number
                         size:
                           type: number
+  /activity/arrivals:
+    get:
+      summary: Get recently added Plex items at episode level (admin only)
+      description: Returns recently added movies and episodes from Plex for the Activity dashboard.
+      tags:
+        - activity
+      responses:
+        '200':
+          description: Recent arrivals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  arrivals:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        kind:
+                          type: string
+                        title:
+                          type: string
+                        subtitle:
+                          type: string
+                        addedAt:
+                          type: number
+                        thumb:
+                          type: string
+  /activity/image:
+    get:
+      summary: Proxy a Plex artwork image (admin only)
+      description: Streams Plex artwork for the Activity dashboard.
+      tags:
+        - activity
+      parameters:
+        - in: query
+          name: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Image data
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
   /status:
     get:
       summary: Get Seerr status

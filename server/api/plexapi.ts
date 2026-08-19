@@ -27,6 +27,13 @@ export interface PlexLibraryItem {
   }[];
   type: 'movie' | 'show' | 'season' | 'episode';
   Media: Media[];
+  grandparentTitle?: string;
+  parentIndex?: number;
+  index?: number;
+  year?: number;
+  thumb?: string;
+  parentThumb?: string;
+  grandparentThumb?: string;
 }
 
 interface PlexLibraryResponse {

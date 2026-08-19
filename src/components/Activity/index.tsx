@@ -1,12 +1,11 @@
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
 import Slider from '@app/components/Slider';
-import TmdbTitleCard from '@app/components/TitleCard/TmdbTitleCard';
 import { Permission, useUser } from '@app/hooks/useUser';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
-import type { MediaResultsResponse } from '@server/interfaces/api/mediaInterfaces';
 import type {
+  ActivityArrival,
   ActivityDownload,
   ActivitySession,
 } from '@server/routes/activity';
@@ -40,6 +39,20 @@ const formatSpeed = (bytesPerSecond: number) =>
     ? `${(bytesPerSecond / 1_000_000).toFixed(1)} MB/s`
     : `${Math.round(bytesPerSecond / 1000)} kB/s`;
 
+const formatAddedAt = (addedAt: number) => {
+  const added = new Date(addedAt * 1000);
+  const today = new Date();
+  const days = Math.floor(
+    (today.setHours(0, 0, 0, 0) - new Date(added).setHours(0, 0, 0, 0)) /
+      86400000
+  );
+  if (days <= 0) return 'TODAY';
+  if (days === 1) return 'YESTERDAY';
+  return added
+    .toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    .toUpperCase();
+};
+
 const formatEta = (seconds: number) =>
   seconds >= 3600
     ? `${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m left`
@@ -54,9 +67,9 @@ const Activity = () => {
     { refreshInterval: 10000 }
   );
 
-  const { data: recentMedia } = useSWR<MediaResultsResponse>(
-    '/api/v1/media?filter=allavailable&take=20&sort=mediaAdded',
-    { revalidateOnMount: true }
+  const { data: arrivalData } = useSWR<{ arrivals: ActivityArrival[] }>(
+    '/api/v1/activity/arrivals',
+    { refreshInterval: 60000 }
   );
 
   const { data: downloadData } = useSWR<{ downloads: ActivityDownload[] }>(
@@ -144,15 +157,36 @@ const Activity = () => {
       </div>
       <Slider
         sliderKey="activity-recent"
-        isLoading={!recentMedia}
-        items={(recentMedia?.results ?? []).map((item) => (
-          <TmdbTitleCard
-            key={`activity-recent-${item.id}`}
-            id={item.id}
-            tmdbId={item.tmdbId}
-            tvdbId={item.tvdbId}
-            type={item.mediaType}
-          />
+        isLoading={!arrivalData}
+        items={(arrivalData?.arrivals ?? []).map((item, index) => (
+          <div
+            key={`arrival-${index}`}
+            className="flex w-36 flex-col gap-1.5"
+          >
+            <div className="relative aspect-[2/3] w-36 overflow-hidden rounded-lg border border-gray-700 bg-gray-800">
+              {item.thumb && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/api/v1/activity/image?path=${encodeURIComponent(
+                    item.thumb
+                  )}`}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              )}
+              <div className="absolute left-1.5 top-1.5 rounded-full bg-gray-900/85 px-2 py-0.5 text-[10px] font-bold tracking-wider text-indigo-400">
+                {formatAddedAt(item.addedAt)}
+              </div>
+            </div>
+            <div className="truncate text-sm font-semibold text-gray-100">
+              {item.title}
+            </div>
+            {item.subtitle && (
+              <div className="truncate text-xs text-gray-400">
+                {item.subtitle}
+              </div>
+            )}
+          </div>
         ))}
       />
 
@@ -172,20 +206,39 @@ const Activity = () => {
           {downloadData.downloads.map((download, index) => (
             <div
               key={`download-${index}`}
-              className="flex flex-col gap-2 rounded-xl border border-gray-700 bg-gray-800 p-4"
+              className="flex items-center gap-4 rounded-xl border border-gray-700 bg-gray-800 p-4"
             >
-              <div className="truncate text-sm font-semibold text-gray-100">
-                {download.name}
+              <div className="h-24 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-700">
+                {download.posterUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={download.posterUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                )}
               </div>
-              <div className="h-1.5 w-full rounded-full bg-gray-700">
-                <div
-                  className="h-1.5 rounded-full bg-indigo-600"
-                  style={{ width: `${download.progress}%` }}
-                />
-              </div>
-              <div className="text-xs text-gray-400">
-                {download.progress}% · {formatSpeed(download.speed)}
-                {download.eta > 0 && <> · {formatEta(download.eta)}</>}
+              <div className="flex min-w-0 flex-grow flex-col gap-2">
+                <div className="flex items-baseline gap-2 truncate">
+                  <span className="truncate text-base font-bold text-gray-100">
+                    {download.title}
+                  </span>
+                  {download.subtitle && (
+                    <span className="truncate text-sm text-gray-400">
+                      {download.subtitle}
+                    </span>
+                  )}
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-gray-700">
+                  <div
+                    className="h-1.5 rounded-full bg-indigo-600"
+                    style={{ width: `${download.progress}%` }}
+                  />
+                </div>
+                <div className="text-xs text-gray-400">
+                  {download.progress}% · {formatSpeed(download.speed)}
+                  {download.eta > 0 && <> · {formatEta(download.eta)}</>}
+                </div>
               </div>
             </div>
           ))}
