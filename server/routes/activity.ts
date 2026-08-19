@@ -382,4 +382,70 @@ activityRoutes.get('/image', async (req, res) => {
   }
 });
 
+export interface AiringEpisode {
+  seriesTitle: string;
+  episodeTitle?: string;
+  season?: number;
+  episode?: number;
+  airDateUtc?: string;
+  posterUrl?: string;
+  network?: string;
+  hasFile: boolean;
+}
+
+// Registered separately with plain isAuthenticated() — the homepage
+// "Airing Tonight" row is for every signed-in user, not just admins.
+export const airingRoutes = Router();
+
+airingRoutes.get('/', async (req, res) => {
+  try {
+    const settings = getSettings();
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start.getTime() + 86400000);
+
+    const episodes: AiringEpisode[] = [];
+    for (const sonarr of settings.sonarr) {
+      const base = `${sonarr.useSsl ? 'https' : 'http'}://${sonarr.hostname}:${
+        sonarr.port
+      }${sonarr.baseUrl ?? ''}`;
+      const response = await fetch(
+        `${base}/api/v3/calendar?start=${start.toISOString()}&end=${end.toISOString()}&includeSeries=true`,
+        { headers: { 'X-Api-Key': sonarr.apiKey } }
+      );
+      if (!response.ok) {
+        continue;
+      }
+      const records = await response.json();
+      for (const record of records) {
+        if (!record.monitored) {
+          continue;
+        }
+        episodes.push({
+          seriesTitle: record.series?.title ?? 'Unknown',
+          episodeTitle: record.title,
+          season: record.seasonNumber,
+          episode: record.episodeNumber,
+          airDateUtc: record.airDateUtc,
+          posterUrl: poster(record.series?.images),
+          network: record.series?.network,
+          hasFile: !!record.hasFile,
+        });
+      }
+    }
+
+    episodes.sort((a, b) =>
+      (a.airDateUtc ?? '').localeCompare(b.airDateUtc ?? '')
+    );
+
+    return res.status(200).json({ episodes });
+  } catch (e) {
+    logger.error('Failed to fetch airing episodes', {
+      label: 'Activity',
+      errorMessage: e.message,
+    });
+    return res.status(500).json({ episodes: [], error: e.message });
+  }
+});
+
 export default activityRoutes;

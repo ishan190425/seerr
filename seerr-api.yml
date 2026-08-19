@@ -2270,6 +2270,41 @@ paths:
               schema:
                 type: string
                 format: binary
+  /airing:
+    get:
+      summary: Get monitored shows airing today
+      description: Returns episodes of monitored Sonarr series airing today, for the homepage Airing Tonight row.
+      tags:
+        - activity
+      responses:
+        '200':
+          description: Episodes airing today
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  episodes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        seriesTitle:
+                          type: string
+                        episodeTitle:
+                          type: string
+                        season:
+                          type: number
+                        episode:
+                          type: number
+                        airDateUtc:
+                          type: string
+                        posterUrl:
+                          type: string
+                        network:
+                          type: string
+                        hasFile:
+                          type: boolean
   /status:
     get:
       summary: Get Seerr status
