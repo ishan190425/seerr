@@ -39,6 +39,46 @@ const formatProgress = (session: ActivitySession) => {
 const minutesLeft = (session: ActivitySession) =>
   Math.max(0, Math.round((session.duration - session.viewOffset) / 60000));
 
+interface DownloadGroup {
+  title: string;
+  subtitle?: string;
+  posterUrl?: string;
+  progress: number;
+  speed: number;
+  eta: number;
+  count: number;
+  totalSize: number;
+}
+
+const groupDownloads = (downloads: ActivityDownload[]): DownloadGroup[] => {
+  const groups = new Map<string, DownloadGroup>();
+  for (const download of downloads) {
+    const existing = groups.get(download.title);
+    if (existing) {
+      const size = Math.max(1, download.size);
+      existing.progress =
+        (existing.progress * existing.totalSize + download.progress * size) /
+        (existing.totalSize + size);
+      existing.totalSize += size;
+      existing.speed += download.speed;
+      existing.eta = Math.max(existing.eta, download.eta);
+      existing.count += 1;
+    } else {
+      groups.set(download.title, {
+        title: download.title,
+        subtitle: download.subtitle,
+        posterUrl: download.posterUrl,
+        progress: download.progress,
+        speed: download.speed,
+        eta: download.eta,
+        count: 1,
+        totalSize: Math.max(1, download.size),
+      });
+    }
+  }
+  return [...groups.values()];
+};
+
 const formatSpeed = (bytesPerSecond: number) =>
   bytesPerSecond >= 1_000_000
     ? `${(bytesPerSecond / 1_000_000).toFixed(1)} MB/s`
@@ -281,7 +321,7 @@ const Activity = () => {
         </div>
       ) : (
         <div className="mb-6 flex flex-wrap gap-4">
-          {downloadData.downloads.map((download, index) => (
+          {groupDownloads(downloadData.downloads).map((download, index) => (
             <div
               key={`download-${index}`}
               className="flex w-36 flex-col gap-1.5"
@@ -298,6 +338,13 @@ const Activity = () => {
                 <div className="absolute left-1.5 top-1.5 rounded-full bg-gray-900/85 px-2 py-0.5 text-[10px] font-bold tracking-wider text-indigo-400">
                   {Math.round(download.progress)}%
                 </div>
+                {download.count > 1 && (
+                  <div className="absolute right-1.5 top-1.5 rounded-full bg-gray-900/85 px-2 py-0.5 text-[10px] font-bold tracking-wider text-gray-300">
+                    {intl.formatMessage(messages.episodecount, {
+                      count: download.count,
+                    })}
+                  </div>
+                )}
                 <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-gray-900/70">
                   <div
                     className="h-1.5 bg-indigo-600"
@@ -309,7 +356,9 @@ const Activity = () => {
                 {download.title}
               </div>
               <div className="truncate text-xs text-gray-400">
-                {download.subtitle ? `${download.subtitle} · ` : ''}
+                {download.count === 1 && download.subtitle
+                  ? `${download.subtitle} · `
+                  : ''}
                 {formatSpeed(download.speed)}
                 {download.eta > 0 ? ` · ${formatEta(download.eta)}` : ''}
               </div>
