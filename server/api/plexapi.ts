@@ -259,6 +259,31 @@ class PlexAPI extends ExternalAPI {
 
     return response.MediaContainer.Metadata ?? [];
   }
+
+  public async getWatchHistory(size = 20): Promise<PlexHistoryMetadata[]> {
+    const response = await this.get<{
+      MediaContainer: { Metadata?: PlexHistoryMetadata[] };
+    }>(
+      '/status/sessions/history/all?sort=viewedAt:desc',
+      { headers: { 'X-Plex-Container-Start': '0', 'X-Plex-Container-Size': String(size) } },
+      0
+    );
+
+    return response.MediaContainer.Metadata ?? [];
+  }
+
+  public async getServerAccounts(): Promise<Map<number, string>> {
+    const response = await this.get<{
+      MediaContainer: { Account?: { id: number; name: string }[] };
+    }>('/accounts', undefined, 60_000);
+
+    return new Map(
+      (response.MediaContainer.Account ?? []).map((account) => [
+        account.id,
+        account.name,
+      ])
+    );
+  }
 }
 
 export interface PlexSessionMetadata {
@@ -270,6 +295,9 @@ export interface PlexSessionMetadata {
   year?: number;
   duration?: number;
   viewOffset?: number;
+  thumb?: string;
+  parentThumb?: string;
+  grandparentThumb?: string;
   User?: { title: string };
   Player?: {
     product?: string;
@@ -284,6 +312,19 @@ interface PlexSessionsResponse {
     size: number;
     Metadata?: PlexSessionMetadata[];
   };
+}
+
+export interface PlexHistoryMetadata {
+  type: string;
+  title: string;
+  grandparentTitle?: string;
+  parentIndex?: number;
+  index?: number;
+  viewedAt: number;
+  accountID?: number;
+  thumb?: string;
+  parentThumb?: string;
+  grandparentThumb?: string;
 }
 
 export default PlexAPI;

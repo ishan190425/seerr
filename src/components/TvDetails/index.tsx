@@ -36,7 +36,10 @@ import { sortCrewPriority } from '@app/utils/creditHelpers';
 import defineMessages from '@app/utils/defineMessages';
 import { refreshIntervalHelper } from '@app/utils/refreshIntervalHelper';
 import { Disclosure, Transition } from '@headlessui/react';
-import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowUpCircleIcon,
+  ChevronDownIcon,
+} from '@heroicons/react/24/outline';
 import {
   ArrowRightCircleIcon,
   CogIcon,
@@ -91,6 +94,8 @@ const messages = defineMessages('components.TvDetails', {
   productioncountries:
     'Production {countryCount, plural, one {Country} other {Countries}}',
   reportissue: 'Report an Issue',
+  upgradetooltip: 'Search for a better quality version',
+  upgradestarted: 'Searching for a better version — the quality profile decides what gets grabbed.',
   manageseries: 'Manage Series',
   seasonstitle: 'Seasons',
   episodeCount: '{episodeCount, plural, one {# Episode} other {# Episodes}}',
@@ -675,6 +680,29 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
             isShowComplete={isComplete}
             is4kShowComplete={is4kComplete}
           />
+          {hasPermission(Permission.ADMIN) &&
+            (data.mediaInfo?.status === MediaStatus.AVAILABLE ||
+              data.mediaInfo?.status === MediaStatus.PARTIALLY_AVAILABLE) &&
+            data.externalIds?.tvdbId && (
+              <Tooltip content={intl.formatMessage(messages.upgradetooltip)}>
+                <Button
+                  buttonType="primary"
+                  className="ml-2 first:ml-0"
+                  onClick={async () => {
+                    await axios.post('/api/v1/activity/upgrade', {
+                      mediaType: 'tv',
+                      tvdbId: data.externalIds.tvdbId,
+                    });
+                    addToast(intl.formatMessage(messages.upgradestarted), {
+                      appearance: 'success',
+                      autoDismiss: true,
+                    });
+                  }}
+                >
+                  <ArrowUpCircleIcon />
+                </Button>
+              </Tooltip>
+            )}
           {(data.mediaInfo?.status === MediaStatus.AVAILABLE ||
             data.mediaInfo?.status === MediaStatus.PARTIALLY_AVAILABLE ||
             (settings.currentSettings.series4kEnabled &&

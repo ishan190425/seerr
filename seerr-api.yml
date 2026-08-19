@@ -2270,6 +2270,69 @@ paths:
               schema:
                 type: string
                 format: binary
+  /activity/history:
+    get:
+      summary: Get recent Plex watch history (admin only)
+      description: Returns recently watched items across all users.
+      tags:
+        - activity
+      responses:
+        '200':
+          description: Watch history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  history:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        user:
+                          type: string
+                        title:
+                          type: string
+                        subtitle:
+                          type: string
+                        kind:
+                          type: string
+                        viewedAt:
+                          type: number
+                        thumb:
+                          type: string
+  /activity/upgrade:
+    post:
+      summary: Trigger a quality-upgrade search (admin only)
+      description: Asks Radarr/Sonarr to re-search existing media; the quality profile decides whether a better release is grabbed.
+      tags:
+        - activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - mediaType
+              properties:
+                mediaType:
+                  type: string
+                  enum: [movie, tv]
+                tmdbId:
+                  type: number
+                tvdbId:
+                  type: number
+      responses:
+        '200':
+          description: Search triggered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  searching:
+                    type: string
   /airing:
     get:
       summary: Get monitored shows airing today

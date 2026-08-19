@@ -34,6 +34,7 @@ export interface ActivitySession {
   state: string;
   duration: number;
   viewOffset: number;
+  thumb?: string;
 }
 
 const activityRoutes = Router();
@@ -76,6 +77,8 @@ activityRoutes.get('/sessions', async (req, res) => {
       state: session.Player?.state ?? 'playing',
       duration: session.duration ?? 0,
       viewOffset: session.viewOffset ?? 0,
+      thumb:
+        session.grandparentThumb ?? session.parentThumb ?? session.thumb,
     }));
 
     return res.status(200).json({ sessions });
@@ -379,6 +382,122 @@ activityRoutes.get('/image', async (req, res) => {
     return res.send(Buffer.from(await response.arrayBuffer()));
   } catch (e) {
     return res.status(500).send('error');
+  }
+});
+
+export interface ActivityHistoryItem {
+  user: string;
+  title: string;
+  subtitle?: string;
+  kind: string;
+  viewedAt: number;
+  thumb?: string;
+}
+
+activityRoutes.get('/history', async (req, res) => {
+  try {
+    const plex = await getAdminPlex();
+    if (!plex) {
+      return res.status(200).json({ history: [] });
+    }
+
+    const [rawHistory, accounts] = await Promise.all([
+      plex.plexClient.getWatchHistory(20),
+      plex.plexClient.getServerAccounts().catch(() => new Map<number, string>()),
+    ]);
+
+    const history: ActivityHistoryItem[] = rawHistory.map((item) => ({
+      user:
+        (item.accountID != null ? accounts.get(item.accountID) : undefined) ??
+        'Someone',
+      title:
+        item.type === 'episode'
+          ? item.grandparentTitle ?? item.title
+          : item.title,
+      subtitle:
+        item.type === 'episode'
+          ? `S${item.parentIndex ?? '?'}E${item.index ?? '?'} · ${item.title}`
+          : undefined,
+      kind: item.type,
+      viewedAt: item.viewedAt,
+      thumb: item.grandparentThumb ?? item.parentThumb ?? item.thumb,
+    }));
+
+    return res.status(200).json({ history });
+  } catch (e) {
+    logger.error('Failed to fetch watch history for activity page', {
+      label: 'Activity',
+      errorMessage: e.message,
+    });
+    return res.status(500).json({ history: [], error: e.message });
+  }
+});
+
+const arrBase = (dvr: {
+  hostname: string;
+  port: number;
+  useSsl: boolean;
+  baseUrl?: string;
+}) =>
+  `${dvr.useSsl ? 'https' : 'http'}://${dvr.hostname}:${dvr.port}${
+    dvr.baseUrl ?? ''
+  }`;
+
+// Trigger a fresh Radarr/Sonarr search for existing media — the *arr grabs
+// the best release its quality profile allows (cutoff upgrade), so this is
+// the "get me a better version" action.
+activityRoutes.post('/upgrade', async (req, res) => {
+  try {
+    const settings = getSettings();
+    const { mediaType, tmdbId, tvdbId } = req.body;
+
+    if (mediaType === 'movie') {
+      const radarr = settings.radarr.find((r) => r.isDefault && !r.is4k);
+      if (!radarr || !tmdbId) {
+        return res.status(400).json({ error: 'no radarr server or tmdbId' });
+      }
+      const headers = { 'X-Api-Key': radarr.apiKey, 'Content-Type': 'application/json' };
+      const movies = await (
+        await fetch(`${arrBase(radarr)}/api/v3/movie?tmdbId=${Number(tmdbId)}`, { headers })
+      ).json();
+      if (!movies.length) {
+        return res.status(404).json({ error: 'movie not in Radarr' });
+      }
+      await fetch(`${arrBase(radarr)}/api/v3/command`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: 'MoviesSearch', movieIds: [movies[0].id] }),
+      });
+      return res.status(200).json({ searching: movies[0].title });
+    }
+
+    if (mediaType === 'tv') {
+      const sonarr = settings.sonarr.find((s) => s.isDefault && !s.is4k);
+      if (!sonarr || !tvdbId) {
+        return res.status(400).json({ error: 'no sonarr server or tvdbId' });
+      }
+      const headers = { 'X-Api-Key': sonarr.apiKey, 'Content-Type': 'application/json' };
+      const series = await (
+        await fetch(`${arrBase(sonarr)}/api/v3/series?tvdbId=${Number(tvdbId)}`, { headers })
+      ).json();
+      if (!series.length) {
+        return res.status(404).json({ error: 'series not in Sonarr' });
+      }
+      await fetch(`${arrBase(sonarr)}/api/v3/command`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: 'SeriesSearch', seriesId: series[0].id }),
+      });
+      return res.status(200).json({ searching: series[0].title });
+    }
+
+    return res.status(400).json({ error: 'invalid mediaType' });
+  } catch (e) {
+    logger.error('Failed to trigger upgrade search', {
+      label: 'Activity',
+      errorMessage: e.message,
+    });
+    return res.status(500).json({ error: e.message });
   }
 });
 

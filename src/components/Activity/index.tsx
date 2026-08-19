@@ -7,6 +7,7 @@ import defineMessages from '@app/utils/defineMessages';
 import type {
   ActivityArrival,
   ActivityDownload,
+  ActivityHistoryItem,
   ActivitySession,
 } from '@server/routes/activity';
 import { useIntl } from 'react-intl';
@@ -22,6 +23,7 @@ const messages = defineMessages('components.Activity', {
   pipelineempty: 'Nothing downloading right now',
   minutesleft: '{minutes} min left',
   paused: 'PAUSED',
+  recentlywatched: 'Recently Watched',
 });
 
 const formatProgress = (session: ActivitySession) => {
@@ -53,6 +55,16 @@ const formatAddedAt = (addedAt: number) => {
     .toUpperCase();
 };
 
+const formatWatchedAt = (viewedAt: number) => {
+  const diffMs = Date.now() - viewedAt * 1000;
+  const hours = Math.floor(diffMs / 3600000);
+  if (hours < 1) return `${Math.max(1, Math.floor(diffMs / 60000))} min ago`;
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'yesterday';
+  return `${days} days ago`;
+};
+
 const formatEta = (seconds: number) =>
   seconds >= 3600
     ? `${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m left`
@@ -75,6 +87,11 @@ const Activity = () => {
   const { data: downloadData } = useSWR<{ downloads: ActivityDownload[] }>(
     '/api/v1/activity/downloads',
     { refreshInterval: 15000 }
+  );
+
+  const { data: historyData } = useSWR<{ history: ActivityHistoryItem[] }>(
+    '/api/v1/activity/history',
+    { refreshInterval: 60000 }
   );
 
   if (!hasPermission(Permission.ADMIN)) {
@@ -113,8 +130,21 @@ const Activity = () => {
             {sessions.map((session, index) => (
               <div
                 key={`session-${index}`}
-                className="flex w-full max-w-md flex-col gap-2 rounded-xl border border-gray-700 bg-gradient-to-br from-indigo-950 via-gray-800 to-gray-900 p-5"
+                className="flex w-full max-w-md gap-4 rounded-xl border border-gray-700 bg-gradient-to-br from-indigo-950 via-gray-800 to-gray-900 p-5"
               >
+                <div className="h-28 w-[75px] flex-shrink-0 overflow-hidden rounded-md bg-gray-700">
+                  {session.thumb && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={`/api/v1/activity/image?path=${encodeURIComponent(
+                        session.thumb
+                      )}`}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-grow flex-col gap-2">
                 <div className="flex items-baseline justify-between gap-3">
                   <div className="truncate text-lg font-extrabold text-gray-100">
                     {session.title}
@@ -143,6 +173,7 @@ const Activity = () => {
                   {intl.formatMessage(messages.minutesleft, {
                     minutes: minutesLeft(session),
                   })}
+                </div>
                 </div>
               </div>
             ))}
@@ -239,6 +270,51 @@ const Activity = () => {
                   {download.progress}% · {formatSpeed(download.speed)}
                   {download.eta > 0 && <> · {formatEta(download.eta)}</>}
                 </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="slider-header mt-6">
+        <div className="slider-title">
+          <span>{intl.formatMessage(messages.recentlywatched)}</span>
+        </div>
+      </div>
+      {!historyData ? (
+        <LoadingSpinner />
+      ) : (
+        <div className="mb-8 flex flex-col gap-3">
+          {historyData.history.map((item, index) => (
+            <div
+              key={`history-${index}`}
+              className="flex items-center gap-4 rounded-xl border border-gray-700 bg-gray-800 p-3"
+            >
+              <div className="h-16 w-11 flex-shrink-0 overflow-hidden rounded bg-gray-700">
+                {item.thumb && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`/api/v1/activity/image?path=${encodeURIComponent(
+                      item.thumb
+                    )}`}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                )}
+              </div>
+              <div className="flex min-w-0 flex-grow flex-col gap-0.5">
+                <div className="truncate text-sm text-gray-100">
+                  <span className="font-bold">{item.user}</span> watched{' '}
+                  <span className="font-bold">{item.title}</span>
+                </div>
+                {item.subtitle && (
+                  <div className="truncate text-xs text-gray-400">
+                    {item.subtitle}
+                  </div>
+                )}
+              </div>
+              <div className="flex-shrink-0 text-xs text-gray-400">
+                {formatWatchedAt(item.viewedAt)}
               </div>
             </div>
           ))}

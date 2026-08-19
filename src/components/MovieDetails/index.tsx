@@ -33,6 +33,7 @@ import { sortCrewPriority } from '@app/utils/creditHelpers';
 import defineMessages from '@app/utils/defineMessages';
 import { refreshIntervalHelper } from '@app/utils/refreshIntervalHelper';
 import {
+  ArrowUpCircleIcon,
   ArrowRightCircleIcon,
   CloudIcon,
   CogIcon,
@@ -95,6 +96,8 @@ const messages = defineMessages('components.MovieDetails', {
   digitalrelease: 'Digital Release',
   physicalrelease: 'Physical Release',
   reportissue: 'Report an Issue',
+  upgradetooltip: 'Search for a better quality version',
+  upgradestarted: 'Searching for a better version — the quality profile decides what gets grabbed.',
   managemovie: 'Manage Movie',
   rtcriticsscore: 'Rotten Tomatoes Tomatometer',
   rtaudiencescore: 'Rotten Tomatoes Audience Score',
@@ -629,6 +632,27 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
             tmdbId={data.id}
             onUpdate={() => revalidate()}
           />
+          {hasPermission(Permission.ADMIN) &&
+            data.mediaInfo?.status === MediaStatus.AVAILABLE && (
+              <Tooltip content={intl.formatMessage(messages.upgradetooltip)}>
+                <Button
+                  buttonType="primary"
+                  className="ml-2 first:ml-0"
+                  onClick={async () => {
+                    await axios.post('/api/v1/activity/upgrade', {
+                      mediaType: 'movie',
+                      tmdbId: data.id,
+                    });
+                    addToast(intl.formatMessage(messages.upgradestarted), {
+                      appearance: 'success',
+                      autoDismiss: true,
+                    });
+                  }}
+                >
+                  <ArrowUpCircleIcon />
+                </Button>
+              </Tooltip>
+            )}
           {(data.mediaInfo?.status === MediaStatus.AVAILABLE ||
             (settings.currentSettings.movie4kEnabled &&
               hasPermission(
