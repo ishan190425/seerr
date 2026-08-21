@@ -35,7 +35,34 @@ export interface ActivitySession {
   duration: number;
   viewOffset: number;
   thumb?: string;
+  quality?: string;
 }
+
+const RESOLUTION_LABELS: Record<string, string> = {
+  '4k': '4K',
+  '1080': '1080p',
+  '720': '720p',
+  '576': '576p',
+  '480': '480p',
+  sd: 'SD',
+};
+
+const formatSessionQuality = (session: {
+  Media?: { videoResolution?: string }[];
+  TranscodeSession?: { videoDecision?: string };
+}): string | undefined => {
+  const resolution = session.Media?.[0]?.videoResolution;
+  const label = resolution
+    ? RESOLUTION_LABELS[resolution.toLowerCase()] ?? resolution
+    : undefined;
+  const decision =
+    session.TranscodeSession?.videoDecision === 'transcode'
+      ? 'Transcode'
+      : session.TranscodeSession
+        ? 'Direct Stream'
+        : 'Direct Play';
+  return label ? `${label} ${decision}` : decision;
+};
 
 const activityRoutes = Router();
 
@@ -79,6 +106,7 @@ activityRoutes.get('/sessions', async (req, res) => {
       viewOffset: session.viewOffset ?? 0,
       thumb:
         session.grandparentThumb ?? session.parentThumb ?? session.thumb,
+      quality: formatSessionQuality(session),
     }));
 
     return res.status(200).json({ sessions });

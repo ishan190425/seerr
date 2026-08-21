@@ -260,6 +260,7 @@ const Activity = () => {
                   {intl.formatMessage(messages.minutesleft, {
                     minutes: minutesLeft(session),
                   })}
+                  {session.quality ? ` · ${session.quality}` : ''}
                 </div>
                 </div>
               </div>

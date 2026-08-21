@@ -298,6 +298,8 @@ export interface PlexSessionMetadata {
   thumb?: string;
   parentThumb?: string;
   grandparentThumb?: string;
+  Media?: { videoResolution?: string }[];
+  TranscodeSession?: { videoDecision?: string };
   User?: { title: string };
   Player?: {
     product?: string;

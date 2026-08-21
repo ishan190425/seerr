@@ -1315,32 +1315,6 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
                 </span>
               </div>
             )}
-            {!!streamingProviders.length && (
-              <div className="media-fact flex-col gap-1">
-                <span>{intl.formatMessage(messages.streamingproviders)}</span>
-                <span className="media-fact-value flex flex-row flex-wrap gap-5">
-                  {streamingProviders.map((p) => {
-                    return (
-                      <Tooltip content={p.name} key={`tooltip-${p.id}`}>
-                        <span
-                          className="opacity-50 transition duration-300 hover:opacity-100"
-                          key={`provider-${p.id}`}
-                        >
-                          <CachedImage
-                            type="tmdb"
-                            src={'https://image.tmdb.org/t/p/w45/' + p.logoPath}
-                            alt={p.name}
-                            width={32}
-                            height={32}
-                            className="rounded-md"
-                          />
-                        </span>
-                      </Tooltip>
-                    );
-                  })}
-                </span>
-              </div>
-            )}
             <div className="media-fact">
               <ExternalLinkBlock
                 mediaType="tv"
