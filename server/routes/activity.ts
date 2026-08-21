@@ -308,6 +308,23 @@ activityRoutes.get('/downloads', async (req, res) => {
       });
     }
 
+    // Active YouTube rescue downloads join the pipeline too
+    for (const job of ytJobs.values()) {
+      if (job.state !== 'downloading' && job.state !== 'importing') {
+        continue;
+      }
+      downloads.push({
+        name: job.movieTitle,
+        title: job.movieTitle,
+        subtitle: 'YouTube',
+        posterUrl: job.posterUrl,
+        progress: job.progress,
+        speed: 0,
+        eta: -1,
+        size: 0,
+      });
+    }
+
     downloads.sort((a, b) => b.speed - a.speed);
 
     return res.status(200).json({ downloads });
@@ -652,6 +669,7 @@ export interface YtJob {
   id: string;
   videoTitle: string;
   movieTitle: string;
+  posterUrl?: string;
   progress: number;
   state: 'downloading' | 'importing' | 'done' | 'failed';
   error?: string;
@@ -738,6 +756,7 @@ activityRoutes.post('/ytdownload', async (req, res) => {
       id: String(videoId),
       videoTitle: String(videoId),
       movieTitle: movie.title,
+      posterUrl: poster(movie.images),
       progress: 0,
       state: 'downloading',
     };

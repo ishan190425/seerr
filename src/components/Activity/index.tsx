@@ -357,11 +357,13 @@ const Activity = () => {
                 {download.title}
               </div>
               <div className="truncate text-xs text-gray-400">
-                {download.count === 1 && download.subtitle
-                  ? `${download.subtitle} · `
-                  : ''}
-                {formatSpeed(download.speed)}
-                {download.eta > 0 ? ` · ${formatEta(download.eta)}` : ''}
+                {[
+                  download.count === 1 ? download.subtitle : undefined,
+                  download.speed > 0 ? formatSpeed(download.speed) : undefined,
+                  download.eta > 0 ? formatEta(download.eta) : undefined,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </div>
             </div>
           ))}

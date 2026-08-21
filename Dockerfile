@@ -58,14 +58,15 @@ ENV COMMIT_TAG=${COMMIT_TAG}
 
 RUN apk add --no-cache tzdata
 
+# yt-dlp + ffmpeg for the YouTube rescue feature (downloads straight into
+# the Radarr movie folder). Pure-python yt-dlp because alpine is musl.
+# Must run as root, before the USER drop.
+RUN apk add --no-cache python3 py3-pip ffmpeg && \
+  pip3 install --no-cache-dir --break-system-packages yt-dlp
+
 USER node:node
 
 WORKDIR /app
-
-# yt-dlp + ffmpeg for the YouTube rescue feature (downloads straight into
-# the Radarr movie folder). Pure-python yt-dlp because alpine is musl.
-RUN apk add --no-cache python3 py3-pip ffmpeg && \
-  pip3 install --no-cache-dir --break-system-packages yt-dlp
 
 COPY --chown=node:node . .
 COPY --chown=node:node --from=prod-deps /app/node_modules ./node_modules
