@@ -2333,6 +2333,48 @@ paths:
                 properties:
                   searching:
                     type: string
+  /activity/quality:
+    get:
+      summary: Get on-disk quality for a library title (admin only)
+      description: Returns the quality of the file(s) Radarr/Sonarr have for this title.
+      tags:
+        - activity
+      parameters:
+        - in: query
+          name: mediaType
+          required: true
+          schema:
+            type: string
+            enum: [movie, tv]
+        - in: query
+          name: tmdbId
+          required: false
+          schema:
+            type: number
+        - in: query
+          name: tvdbId
+          required: false
+          schema:
+            type: number
+      responses:
+        '200':
+          description: On-disk qualities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  qualities:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        label:
+                          type: string
+                        count:
+                          type: number
+                        sizeBytes:
+                          type: number
   /airing:
     get:
       summary: Get monitored shows airing today

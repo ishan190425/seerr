@@ -90,6 +90,7 @@ const messages = defineMessages('components.MovieDetails', {
   showmore: 'Show More',
   showless: 'Show Less',
   streamingproviders: 'Currently Streaming On',
+  qualityinplex: 'Quality in Plex',
   productioncountries:
     'Production {countryCount, plural, one {Country} other {Countries}}',
   theatricalrelease: 'Theatrical Release',
@@ -114,6 +115,15 @@ const messages = defineMessages('components.MovieDetails', {
 interface MovieDetailsProps {
   movie?: MovieDetailsType;
 }
+
+interface LibraryQualityResponse {
+  qualities: { label: string; count: number; sizeBytes: number }[];
+}
+
+const formatFileSize = (bytes: number) =>
+  bytes >= 1_000_000_000
+    ? `${(bytes / 1_000_000_000).toFixed(1)} GB`
+    : `${Math.round(bytes / 1_000_000)} MB`;
 
 const MovieDetails = ({ movie }: MovieDetailsProps) => {
   const settings = useSettings();
@@ -148,6 +158,13 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
       15000
     ),
   });
+
+  const { data: qualityData } = useSWR<LibraryQualityResponse>(
+    hasPermission(Permission.ADMIN) &&
+      data?.mediaInfo?.status === MediaStatus.AVAILABLE
+      ? `/api/v1/activity/quality?mediaType=movie&tmdbId=${data.id}`
+      : null
+  );
 
   const { data: ratingData } = useSWR<RatingResponse>(
     `/api/v1/movie/${router.query.movieId}/ratingscombined`
@@ -891,6 +908,15 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
               <span>{intl.formatMessage(globalMessages.status)}</span>
               <span className="media-fact-value">{data.status}</span>
             </div>
+            {!!qualityData?.qualities?.length && (
+              <div className="media-fact">
+                <span>{intl.formatMessage(messages.qualityinplex)}</span>
+                <span className="media-fact-value">
+                  {qualityData.qualities[0].label} ·{' '}
+                  {formatFileSize(qualityData.qualities[0].sizeBytes)}
+                </span>
+              </div>
+            )}
             {filteredReleases && filteredReleases.length > 0 ? (
               <div className="media-fact">
                 <span>

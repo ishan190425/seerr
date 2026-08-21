@@ -529,6 +529,97 @@ activityRoutes.post('/upgrade', async (req, res) => {
   }
 });
 
+export interface QualityInfo {
+  label: string;
+  count: number;
+  sizeBytes: number;
+}
+
+// What quality is actually on disk for a library title, straight from the
+// *arr file records (e.g. "Bluray-1080p").
+activityRoutes.get('/quality', async (req, res) => {
+  try {
+    const settings = getSettings();
+    const mediaType = req.query.mediaType;
+
+    if (mediaType === 'movie') {
+      const radarr = settings.radarr.find((r) => r.isDefault && !r.is4k);
+      const tmdbId = Number(req.query.tmdbId);
+      if (!radarr || !tmdbId) {
+        return res.status(200).json({ qualities: [] });
+      }
+      const headers = { 'X-Api-Key': radarr.apiKey };
+      const movies = await (
+        await fetch(`${arrBase(radarr)}/api/v3/movie?tmdbId=${tmdbId}`, {
+          headers,
+        })
+      ).json();
+      const file = movies?.[0]?.movieFile;
+      if (!file) {
+        return res.status(200).json({ qualities: [] });
+      }
+      return res.status(200).json({
+        qualities: [
+          {
+            label: file.quality?.quality?.name ?? 'Unknown',
+            count: 1,
+            sizeBytes: file.size ?? 0,
+          },
+        ],
+      });
+    }
+
+    if (mediaType === 'tv') {
+      const sonarr = settings.sonarr.find((s) => s.isDefault && !s.is4k);
+      const tvdbId = Number(req.query.tvdbId);
+      if (!sonarr || !tvdbId) {
+        return res.status(200).json({ qualities: [] });
+      }
+      const headers = { 'X-Api-Key': sonarr.apiKey };
+      const series = await (
+        await fetch(`${arrBase(sonarr)}/api/v3/series?tvdbId=${tvdbId}`, {
+          headers,
+        })
+      ).json();
+      if (!series?.length) {
+        return res.status(200).json({ qualities: [] });
+      }
+      const files = await (
+        await fetch(
+          `${arrBase(sonarr)}/api/v3/episodefile?seriesId=${series[0].id}`,
+          { headers }
+        )
+      ).json();
+      const byQuality = new Map<string, QualityInfo>();
+      for (const file of files ?? []) {
+        const label = file.quality?.quality?.name ?? 'Unknown';
+        const existing = byQuality.get(label);
+        if (existing) {
+          existing.count += 1;
+          existing.sizeBytes += file.size ?? 0;
+        } else {
+          byQuality.set(label, {
+            label,
+            count: 1,
+            sizeBytes: file.size ?? 0,
+          });
+        }
+      }
+      return res.status(200).json({
+        qualities: [...byQuality.values()].sort((a, b) => b.count - a.count),
+      });
+    }
+
+    return res.status(200).json({ qualities: [] });
+  } catch (e) {
+    logger.error('Failed to fetch library quality', {
+      label: 'Activity',
+      errorMessage: e.message,
+    });
+    return res.status(500).json({ qualities: [], error: e.message });
+  }
+});
+
 export interface AiringEpisode {
   seriesTitle: string;
   episodeTitle?: string;

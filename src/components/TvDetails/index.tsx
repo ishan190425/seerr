@@ -91,6 +91,7 @@ const messages = defineMessages('components.TvDetails', {
   episodeRuntime: 'Episode Runtime',
   episodeRuntimeMinutes: '{runtime} minutes',
   streamingproviders: 'Currently Streaming On',
+  qualityinplex: 'Quality in Plex',
   productioncountries:
     'Production {countryCount, plural, one {Country} other {Countries}}',
   reportissue: 'Report an Issue',
@@ -115,6 +116,15 @@ const messages = defineMessages('components.TvDetails', {
 interface TvDetailsProps {
   tv?: TvDetailsType;
 }
+
+interface LibraryQualityResponse {
+  qualities: { label: string; count: number; sizeBytes: number }[];
+}
+
+const formatFileSize = (bytes: number) =>
+  bytes >= 1_000_000_000
+    ? `${(bytes / 1_000_000_000).toFixed(1)} GB`
+    : `${Math.round(bytes / 1_000_000)} MB`;
 
 const TvDetails = ({ tv }: TvDetailsProps) => {
   const settings = useSettings();
@@ -148,6 +158,15 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
       15000
     ),
   });
+
+  const { data: qualityData } = useSWR<LibraryQualityResponse>(
+    hasPermission(Permission.ADMIN) &&
+      (data?.mediaInfo?.status === MediaStatus.AVAILABLE ||
+        data?.mediaInfo?.status === MediaStatus.PARTIALLY_AVAILABLE) &&
+      data?.externalIds?.tvdbId
+      ? `/api/v1/activity/quality?mediaType=tv&tvdbId=${data.externalIds.tvdbId}`
+      : null
+  );
 
   const { data: ratingData } = useSWR<RTRating>(
     `/api/v1/tv/${router.query.tvId}/ratings`
@@ -1188,6 +1207,17 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
                   <span className="media-fact-value">{data.originalName}</span>
                 </div>
               )}
+            {!!qualityData?.qualities?.length && (
+              <div className="media-fact">
+                <span>{intl.formatMessage(messages.qualityinplex)}</span>
+                <span className="media-fact-value">
+                  {qualityData.qualities
+                    .slice(0, 3)
+                    .map((q) => `${q.label} × ${q.count}`)
+                    .join(', ')}
+                </span>
+              </div>
+            )}
             {data.keywords.some(
               (keyword) => keyword.id === ANIME_KEYWORD_ID
             ) && (
