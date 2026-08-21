@@ -2388,6 +2388,99 @@ paths:
                           type: string
                         sizeBytes:
                           type: number
+  /activity/ytsearch:
+    get:
+      summary: Search YouTube for rescue candidates (admin only)
+      tags:
+        - activity
+      parameters:
+        - in: query
+          name: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Candidates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  candidates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        videoId:
+                          type: string
+                        title:
+                          type: string
+                        channel:
+                          type: string
+                        duration:
+                          type: number
+                        url:
+                          type: string
+  /activity/ytdownload:
+    post:
+      summary: Download a YouTube video into the movie's Radarr folder (admin only)
+      tags:
+        - activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - videoId
+                - tmdbId
+              properties:
+                videoId:
+                  type: string
+                tmdbId:
+                  type: number
+      responses:
+        '200':
+          description: Job started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+  /activity/ytjobs:
+    get:
+      summary: List YouTube download jobs (admin only)
+      tags:
+        - activity
+      responses:
+        '200':
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        videoTitle:
+                          type: string
+                        movieTitle:
+                          type: string
+                        progress:
+                          type: number
+                        state:
+                          type: string
+                        error:
+                          type: string
   /airing:
     get:
       summary: Get monitored shows airing today

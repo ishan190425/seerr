@@ -19,6 +19,7 @@ import IssueModal from '@app/components/IssueModal';
 import ManageSlideOver from '@app/components/ManageSlideOver';
 import MediaSlider from '@app/components/MediaSlider';
 import PersonCard from '@app/components/PersonCard';
+import YoutubeRescue from '@app/components/MovieDetails/YoutubeRescue';
 import RequestButton from '@app/components/RequestButton';
 import Slider from '@app/components/Slider';
 import StatusBadge from '@app/components/StatusBadge';
@@ -728,6 +729,16 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
               </Tooltip>
             )}
         </div>
+        {hasPermission(Permission.ADMIN) &&
+          (data.mediaInfo?.status === MediaStatus.PROCESSING ||
+            data.mediaInfo?.status === MediaStatus.PENDING) && (
+            <YoutubeRescue
+              tmdbId={data.id}
+              title={data.title}
+              year={data.releaseDate?.slice(0, 4)}
+              runtime={data.runtime}
+            />
+          )}
       </div>
       <div className="media-overview">
         <div className="media-overview-left">

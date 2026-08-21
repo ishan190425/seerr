@@ -3,6 +3,7 @@ import { getRepository } from '@server/datasource';
 import { User } from '@server/entity/User';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
+import { spawn } from 'child_process';
 import { Router } from 'express';
 
 const getAdminPlex = async (): Promise<{
@@ -637,6 +638,175 @@ activityRoutes.get('/quality', async (req, res) => {
     });
     return res.status(500).json({ qualities: [], episodes: [], error: e.message });
   }
+});
+
+export interface YtCandidate {
+  videoId: string;
+  title: string;
+  channel?: string;
+  duration: number;
+  url: string;
+}
+
+export interface YtJob {
+  id: string;
+  videoTitle: string;
+  movieTitle: string;
+  progress: number;
+  state: 'downloading' | 'importing' | 'done' | 'failed';
+  error?: string;
+}
+
+const ytJobs = new Map<string, YtJob>();
+
+// Search YouTube via yt-dlp (flat playlist = fast, metadata only)
+activityRoutes.get('/ytsearch', async (req, res) => {
+  const query = String(req.query.query ?? '');
+  if (!query) {
+    return res.status(400).json({ candidates: [] });
+  }
+  const child = spawn(
+    'yt-dlp',
+    [`ytsearch6:${query}`, '--dump-json', '--flat-playlist', '--no-download'],
+    { timeout: 45000 }
+  );
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (chunk) => (stdout += chunk));
+  child.stderr.on('data', (chunk) => (stderr += chunk));
+  child.on('close', (code) => {
+    if (code !== 0 && !stdout.trim()) {
+      logger.error('yt-dlp search failed', {
+        label: 'Activity',
+        errorMessage: stderr.slice(-400),
+      });
+      return res.status(500).json({ candidates: [], error: 'search failed' });
+    }
+    const candidates: YtCandidate[] = stdout
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        try {
+          const entry = JSON.parse(line);
+          return {
+            videoId: entry.id,
+            title: entry.title,
+            channel: entry.channel ?? entry.uploader,
+            duration: Math.round(entry.duration ?? 0),
+            url: `https://www.youtube.com/watch?v=${entry.id}`,
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter((c): c is YtCandidate => !!c && !!c.videoId);
+    return res.status(200).json({ candidates });
+  });
+});
+
+const sanitizeFilename = (name: string) => name.replace(/[/\\:*?"<>|]/g, '');
+
+// Download a YouTube video straight into the movie's Radarr folder, then
+// ask Radarr to rescan so it imports like any normal grab.
+activityRoutes.post('/ytdownload', async (req, res) => {
+  try {
+    const settings = getSettings();
+    const { videoId, tmdbId } = req.body;
+    const radarr = settings.radarr.find((r) => r.isDefault && !r.is4k);
+    if (!radarr || !videoId || !tmdbId) {
+      return res.status(400).json({ error: 'missing radarr, videoId or tmdbId' });
+    }
+    const headers = { 'X-Api-Key': radarr.apiKey, 'Content-Type': 'application/json' };
+    const movies = await (
+      await fetch(`${arrBase(radarr)}/api/v3/movie?tmdbId=${Number(tmdbId)}`, {
+        headers,
+      })
+    ).json();
+    if (!movies?.length) {
+      return res.status(404).json({ error: 'movie not in Radarr' });
+    }
+    const movie = movies[0];
+    if (ytJobs.get(String(videoId))?.state === 'downloading') {
+      return res.status(409).json({ error: 'already downloading' });
+    }
+
+    const outTemplate = `${movie.path}/${sanitizeFilename(movie.title)} (${
+      movie.year
+    }).%(ext)s`;
+    const job: YtJob = {
+      id: String(videoId),
+      videoTitle: String(videoId),
+      movieTitle: movie.title,
+      progress: 0,
+      state: 'downloading',
+    };
+    ytJobs.set(job.id, job);
+
+    const child = spawn('yt-dlp', [
+      '-f',
+      'bv*+ba/b',
+      '--merge-output-format',
+      'mkv',
+      '--newline',
+      '--no-playlist',
+      '-o',
+      outTemplate,
+      `https://www.youtube.com/watch?v=${videoId}`,
+    ]);
+    let stderrTail = '';
+    child.stdout.on('data', (chunk) => {
+      const text = String(chunk);
+      const match = text.match(/\[download\]\s+([\d.]+)%/);
+      if (match) {
+        job.progress = Math.min(99, parseFloat(match[1]));
+      }
+      if (text.includes('[Merger]')) {
+        job.state = 'importing';
+      }
+    });
+    child.stderr.on('data', (chunk) => (stderrTail = String(chunk).slice(-400)));
+    child.on('close', async (code) => {
+      if (code === 0) {
+        job.progress = 100;
+        job.state = 'importing';
+        try {
+          await fetch(`${arrBase(radarr)}/api/v3/command`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ name: 'RescanMovie', movieId: movie.id }),
+          });
+          job.state = 'done';
+        } catch (e) {
+          job.state = 'done';
+        }
+        logger.info('YouTube rescue download complete', {
+          label: 'Activity',
+          movie: movie.title,
+        });
+      } else {
+        job.state = 'failed';
+        job.error = stderrTail;
+        logger.error('YouTube rescue download failed', {
+          label: 'Activity',
+          movie: movie.title,
+          errorMessage: stderrTail,
+        });
+      }
+    });
+
+    return res.status(200).json({ jobId: job.id });
+  } catch (e) {
+    logger.error('Failed to start YouTube download', {
+      label: 'Activity',
+      errorMessage: e.message,
+    });
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+activityRoutes.get('/ytjobs', (req, res) => {
+  return res.status(200).json({ jobs: [...ytJobs.values()] });
 });
 
 export interface AiringEpisode {
