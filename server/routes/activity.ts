@@ -501,6 +501,77 @@ activityRoutes.post('/upgrade', async (req, res) => {
 
     if (mediaType === 'tv') {
       const sonarr = settings.sonarr.find((s) => s.isDefault && !s.is4k);
+      if (!sonarr || !tvdbId) {
+        return res.status(400).json({ error: 'no sonarr server or tvdbId' });
+      }
+      const headers = { 'X-Api-Key': sonarr.apiKey, 'Content-Type': 'application/json' };
+      const series = await (
+        await fetch(`${arrBase(sonarr)}/api/v3/series?tvdbId=${Number(tvdbId)}`, { headers })
+      ).json();
+      if (!series.length) {
+        return res.status(404).json({ error: 'series not in Sonarr' });
+      }
+      await fetch(`${arrBase(sonarr)}/api/v3/command`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: 'SeriesSearch', seriesId: series[0].id }),
+      });
+      return res.status(200).json({ searching: series[0].title });
+    }
+
+    return res.status(400).json({ error: 'invalid mediaType' });
+  } catch (e) {
+    logger.error('Failed to trigger upgrade search', {
+      label: 'Activity',
+      errorMessage: e.message,
+    });
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+export interface QualityInfo {
+  label: string;
+  count: number;
+  sizeBytes: number;
+}
+
+// What quality is actually on disk for a library title, straight from the
+// *arr file records (e.g. "Bluray-1080p"). For shows, per-episode entries.
+activityRoutes.get('/quality', async (req, res) => {
+  try {
+    const settings = getSettings();
+    const mediaType = req.query.mediaType;
+
+    if (mediaType === 'movie') {
+      const radarr = settings.radarr.find((r) => r.isDefault && !r.is4k);
+      const tmdbId = Number(req.query.tmdbId);
+      if (!radarr || !tmdbId) {
+        return res.status(200).json({ qualities: [], episodes: [] });
+      }
+      const headers = { 'X-Api-Key': radarr.apiKey };
+      const movies = await (
+        await fetch(`${arrBase(radarr)}/api/v3/movie?tmdbId=${tmdbId}`, {
+          headers,
+        })
+      ).json();
+      const file = movies?.[0]?.movieFile;
+      if (!file) {
+        return res.status(200).json({ qualities: [], episodes: [] });
+      }
+      return res.status(200).json({
+        qualities: [
+          {
+            label: file.quality?.quality?.name ?? 'Unknown',
+            count: 1,
+            sizeBytes: file.size ?? 0,
+          },
+        ],
+        episodes: [],
+      });
+    }
+
+    if (mediaType === 'tv') {
+      const sonarr = settings.sonarr.find((s) => s.isDefault && !s.is4k);
       const tvdbId = Number(req.query.tvdbId);
       if (!sonarr || !tvdbId) {
         return res.status(200).json({ qualities: [], episodes: [] });
@@ -553,16 +624,18 @@ activityRoutes.post('/upgrade', async (req, res) => {
             };
           }
         );
-      return res.status(200).json({ qualities: [], episodes: episodeQualities });
+      return res
+        .status(200)
+        .json({ qualities: [], episodes: episodeQualities });
     }
 
-    return res.status(200).json({ qualities: [] });
+    return res.status(200).json({ qualities: [], episodes: [] });
   } catch (e) {
     logger.error('Failed to fetch library quality', {
       label: 'Activity',
       errorMessage: e.message,
     });
-    return res.status(500).json({ qualities: [], error: e.message });
+    return res.status(500).json({ qualities: [], episodes: [], error: e.message });
   }
 });
 
