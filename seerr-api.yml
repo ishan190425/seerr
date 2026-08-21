@@ -2375,6 +2375,19 @@ paths:
                           type: number
                         sizeBytes:
                           type: number
+                  episodes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        season:
+                          type: number
+                        episode:
+                          type: number
+                        label:
+                          type: string
+                        sizeBytes:
+                          type: number
   /airing:
     get:
       summary: Get monitored shows airing today
