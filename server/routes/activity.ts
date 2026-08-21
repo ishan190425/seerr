@@ -308,15 +308,19 @@ activityRoutes.get('/downloads', async (req, res) => {
       });
     }
 
-    // Active YouTube rescue downloads join the pipeline too
+    // Active YouTube rescue downloads join the pipeline too; finished ones
+    // linger for 30 minutes with their final state so they don't just vanish
     for (const job of ytJobs.values()) {
-      if (job.state !== 'downloading' && job.state !== 'importing') {
+      const active = job.state === 'downloading' || job.state === 'importing';
+      const recent =
+        job.completedAt != null && Date.now() - job.completedAt < 30 * 60_000;
+      if (!active && !recent) {
         continue;
       }
       downloads.push({
         name: job.movieTitle,
         title: job.movieTitle,
-        subtitle: 'YouTube',
+        subtitle: active ? 'YouTube' : `YouTube · ${job.state.toUpperCase()}`,
         posterUrl: job.posterUrl,
         progress: job.progress,
         speed: 0,
@@ -672,6 +676,7 @@ export interface YtJob {
   posterUrl?: string;
   progress: number;
   state: 'downloading' | 'importing' | 'done' | 'failed';
+  completedAt?: number;
   error?: string;
 }
 
@@ -787,6 +792,7 @@ activityRoutes.post('/ytdownload', async (req, res) => {
     });
     child.stderr.on('data', (chunk) => (stderrTail = String(chunk).slice(-400)));
     child.on('close', async (code) => {
+      job.completedAt = Date.now();
       if (code === 0) {
         job.progress = 100;
         job.state = 'importing';
