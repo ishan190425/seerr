@@ -700,25 +700,26 @@ activityRoutes.get('/ytsearch', async (req, res) => {
       });
       return res.status(500).json({ candidates: [], error: 'search failed' });
     }
-    const candidates: YtCandidate[] = stdout
-      .trim()
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => {
-        try {
-          const entry = JSON.parse(line);
-          return {
+    const candidates: YtCandidate[] = [];
+    for (const line of stdout.trim().split('\n')) {
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        const entry = JSON.parse(line);
+        if (entry?.id) {
+          candidates.push({
             videoId: entry.id,
             title: entry.title,
             channel: entry.channel ?? entry.uploader,
             duration: Math.round(entry.duration ?? 0),
             url: `https://www.youtube.com/watch?v=${entry.id}`,
-          };
-        } catch {
-          return null;
+          });
         }
-      })
-      .filter((c): c is YtCandidate => !!c && !!c.videoId);
+      } catch {
+        // skip unparseable lines
+      }
+    }
     return res.status(200).json({ candidates });
   });
 });
