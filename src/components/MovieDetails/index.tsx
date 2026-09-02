@@ -24,6 +24,7 @@ import RequestButton from '@app/components/RequestButton';
 import Slider from '@app/components/Slider';
 import StatusBadge from '@app/components/StatusBadge';
 import useDeepLinks from '@app/hooks/useDeepLinks';
+import WatchPlayer from '@app/components/WatchPlayer';
 import useLocale from '@app/hooks/useLocale';
 import useSettings from '@app/hooks/useSettings';
 import useToasts from '@app/hooks/useToasts';
@@ -72,6 +73,7 @@ const messages = defineMessages('components.MovieDetails', {
   revenue: 'Revenue',
   budget: 'Budget',
   watchtrailer: 'Watch Trailer',
+  watchnow: 'Watch Now',
   originallanguage: 'Original Language',
   overview: 'Overview',
   runtime: '{minutes} minutes',
@@ -136,6 +138,7 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
   const minStudios = 3;
   const [showMoreStudios, setShowMoreStudios] = useState(false);
   const [showIssueModal, setShowIssueModal] = useState(false);
+  const [showWatchPlayer, setShowWatchPlayer] = useState(false);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
   const [toggleWatchlist, setToggleWatchlist] = useState<boolean>(
     !movie?.onUserWatchlist
@@ -208,6 +211,17 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
 
   const showAllStudios = data.productionCompanies.length <= minStudios + 1;
   const mediaLinks: PlayButtonLink[] = [];
+
+  const watchRatingKey =
+    data.mediaInfo?.ratingKey ?? data.mediaInfo?.ratingKey4k;
+
+  if (watchRatingKey) {
+    mediaLinks.push({
+      text: intl.formatMessage(messages.watchnow),
+      onClick: () => setShowWatchPlayer(true),
+      svg: <PlayIcon />,
+    });
+  }
 
   if (
     plexUrl &&
@@ -463,6 +477,13 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
         height: 493,
       }}
     >
+      {showWatchPlayer && watchRatingKey && (
+        <WatchPlayer
+          ratingKey={watchRatingKey}
+          title={data.title}
+          onClose={() => setShowWatchPlayer(false)}
+        />
+      )}
       {data.backdropPath && (
         <div className="media-page-bg-image">
           <CachedImage

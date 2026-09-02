@@ -6,7 +6,8 @@ interface PlayButtonProps {
 
 export interface PlayButtonLink {
   text: string;
-  url: string;
+  url?: string;
+  onClick?: () => void;
   svg: React.ReactNode;
 }
 
@@ -26,7 +27,8 @@ const PlayButton = ({ links }: PlayButtonProps) => {
         </>
       }
       href={links[0].url}
-      target="_blank"
+      onClick={links[0].onClick}
+      target={links[0].url ? '_blank' : undefined}
     >
       {links.length > 1 &&
         links.slice(1).map((link, i) => {
@@ -35,7 +37,8 @@ const PlayButton = ({ links }: PlayButtonProps) => {
               key={`play-button-dropdown-item-${i}`}
               buttonType="ghost"
               href={link.url}
-              target="_blank"
+              onClick={link.onClick}
+              target={link.url ? '_blank' : undefined}
             >
               {link.svg}
               <span>{link.text}</span>
