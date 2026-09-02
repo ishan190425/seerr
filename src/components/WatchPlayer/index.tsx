@@ -29,10 +29,11 @@ const WatchPlayer = ({ ratingKey, title, onClose }: WatchPlayerProps) => {
       subtitles: 'burn',
       audioBoost: '100',
       location: 'lan',
+      hasMDE: '1',
       session,
       'X-Plex-Client-Identifier': 'rathi-studios-web',
       'X-Plex-Product': 'Rathi Studios',
-      'X-Plex-Platform': 'Web',
+      'X-Plex-Platform': 'Chrome',
       'X-Plex-Device': 'Browser',
     });
     const src = `/api/v1/watch/plex/video/:/transcode/universal/start.m3u8?${params.toString()}`;
