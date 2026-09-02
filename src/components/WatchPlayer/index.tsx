@@ -55,27 +55,46 @@ const WatchPlayer = ({ ratingKey, title, onClose }: WatchPlayerProps) => {
         const res = await fetch('/api/v1/watch/streaminfo');
         const info: StreamInfo = await res.json();
         if (info.token && info.connections?.length) {
-          const ordered = [...info.connections].sort(
-            (a, b) => Number(b.local) - Number(a.local)
-          );
-          for (const conn of ordered) {
-            try {
-              const controller = new AbortController();
-              const timer = setTimeout(() => controller.abort(), 3000);
-              const ping = await fetch(
-                `${conn.uri}/identity?X-Plex-Token=${info.token}`,
-                { signal: controller.signal }
-              );
-              clearTimeout(timer);
-              if (ping.ok && !cancelled) {
-                setDirectBase(conn.uri);
-                setToken(info.token);
-                setResolved(true);
+          const probeAll = (uris: string[]) =>
+            new Promise<string | null>((resolve) => {
+              let pending = uris.length;
+              let done = false;
+              if (!pending) {
+                resolve(null);
                 return;
               }
-            } catch {
-              // try the next connection
-            }
+              uris.forEach(async (uri) => {
+                try {
+                  const controller = new AbortController();
+                  const timer = setTimeout(() => controller.abort(), 4000);
+                  const ping = await fetch(
+                    `${uri}/identity?X-Plex-Token=${info.token}`,
+                    { signal: controller.signal }
+                  );
+                  clearTimeout(timer);
+                  if (ping.ok && !done) {
+                    done = true;
+                    resolve(uri);
+                  }
+                } catch {
+                  // unreachable from this network
+                }
+                if (--pending === 0 && !done) {
+                  resolve(null);
+                }
+              });
+            });
+          // Prefer LAN connections, fall back to the public address
+          const locals = info.connections.filter((c) => c.local);
+          const publics = info.connections.filter((c) => !c.local);
+          const base =
+            (await probeAll(locals.map((c) => c.uri))) ??
+            (await probeAll(publics.map((c) => c.uri)));
+          if (base && !cancelled) {
+            setDirectBase(base);
+            setToken(info.token);
+            setResolved(true);
+            return;
           }
         }
       } catch {

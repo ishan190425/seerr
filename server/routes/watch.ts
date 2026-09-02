@@ -86,6 +86,8 @@ watchRoutes.get('/streaminfo', async (req, res) => {
           );
           connections = (server?.connections ?? [])
             .filter((c) => !c.relay)
+            // Docker bridge addresses are unreachable from any browser
+            .filter((c) => !/^https:\/\/172-(1[6-9]|2\d|3[01])-/.test(c.uri))
             .map((c) => ({ uri: c.uri, local: c.local }));
           cachedConnections = connections;
           cachedConnectionsAt = Date.now();
