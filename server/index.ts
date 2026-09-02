@@ -247,6 +247,9 @@ app
       OpenApiValidator.middleware({
         apiSpec: API_SPEC_PATH,
         validateRequests: true,
+        // Plex stream proxy paths are multi-segment and can't be described
+        // with OpenAPI path templating
+        ignorePaths: /^\/api\/v1\/watch\//,
       })
     );
     /**
