@@ -14,6 +14,7 @@ const ALLOWED_GET_PREFIXES = [
   'video/:/transcode/universal/',
   'library/parts/',
   'library/metadata/',
+  ':/timeline',
 ];
 // PUT is only for audio/subtitle stream selection on a part
 const ALLOWED_PUT_PATTERN = /^library\/parts\/\d+$/;

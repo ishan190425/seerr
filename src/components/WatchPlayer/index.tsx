@@ -5,6 +5,13 @@ import { createPortal } from 'react-dom';
 
 const PROXY_BASE = '/api/v1/watch/plex';
 
+const PLEX_CLIENT_PARAMS = {
+  'X-Plex-Client-Identifier': 'rathi-studios-web',
+  'X-Plex-Product': 'Rathi Studios',
+  'X-Plex-Platform': 'Chrome',
+  'X-Plex-Device': 'Browser',
+};
+
 interface PlexStream {
   id: number;
   streamType: number;
@@ -30,12 +37,19 @@ const WatchPlayer = ({ ratingKey, title, onClose }: WatchPlayerProps) => {
   const [resolved, setResolved] = useState(false);
   const [directBase, setDirectBase] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [mediaReady, setMediaReady] = useState(false);
   const [partId, setPartId] = useState<number | null>(null);
+  const [durationMs, setDurationMs] = useState<number>(0);
+  const [resumeMs, setResumeMs] = useState<number>(0);
+  const [resumed, setResumed] = useState(false);
   const [audioStreams, setAudioStreams] = useState<PlexStream[]>([]);
   const [subStreams, setSubStreams] = useState<PlexStream[]>([]);
   const [audioId, setAudioId] = useState<number | null>(null);
   const [subId, setSubId] = useState<number>(0);
   const [generation, setGeneration] = useState(0);
+  // Position to restore after a stream-selection restart
+  const continueAtRef = useRef<number | null>(null);
+  const appliedResumeRef = useRef(false);
 
   const mediaUrl = (path: string, params?: URLSearchParams) => {
     const qs = params ? `?${params.toString()}` : '';
@@ -109,7 +123,7 @@ const WatchPlayer = ({ ratingKey, title, onClose }: WatchPlayerProps) => {
     };
   }, []);
 
-  // Load the media's audio/subtitle streams
+  // Load the media's streams, duration, and saved resume position
   useEffect(() => {
     if (!resolved) {
       return;
@@ -120,23 +134,39 @@ const WatchPlayer = ({ ratingKey, title, onClose }: WatchPlayerProps) => {
         const res = await fetch(mediaUrl(`/library/metadata/${ratingKey}`), {
           headers: { accept: 'application/json' },
         });
-        const part = (await res.json())?.MediaContainer?.Metadata?.[0]
-          ?.Media?.[0]?.Part?.[0];
-        if (!part || cancelled) {
+        const meta = (await res.json())?.MediaContainer?.Metadata?.[0];
+        const part = meta?.Media?.[0]?.Part?.[0];
+        if (cancelled) {
           return;
         }
-        const streams: PlexStream[] = part.Stream ?? [];
-        setPartId(part.id);
-        setAudioStreams(streams.filter((s) => s.streamType === 2));
-        setSubStreams(streams.filter((s) => s.streamType === 3));
-        setAudioId(
-          streams.find((s) => s.streamType === 2 && s.selected)?.id ?? null
-        );
-        setSubId(
-          streams.find((s) => s.streamType === 3 && s.selected)?.id ?? 0
-        );
+        if (part) {
+          const streams: PlexStream[] = part.Stream ?? [];
+          setPartId(part.id);
+          setAudioStreams(streams.filter((s) => s.streamType === 2));
+          setSubStreams(streams.filter((s) => s.streamType === 3));
+          setAudioId(
+            streams.find((s) => s.streamType === 2 && s.selected)?.id ?? null
+          );
+          setSubId(
+            streams.find((s) => s.streamType === 3 && s.selected)?.id ?? 0
+          );
+        }
+        const duration: number = meta?.duration ?? 0;
+        const viewOffset: number = meta?.viewOffset ?? 0;
+        setDurationMs(duration);
+        // Resume when meaningfully into the item but not effectively finished
+        if (
+          viewOffset > 60_000 &&
+          (!duration || viewOffset < duration * 0.95)
+        ) {
+          setResumeMs(viewOffset);
+        }
       } catch {
-        // selectors just stay hidden
+        // play from the start; selectors stay hidden
+      } finally {
+        if (!cancelled) {
+          setMediaReady(true);
+        }
       }
     })();
     return () => {
@@ -147,7 +177,7 @@ const WatchPlayer = ({ ratingKey, title, onClose }: WatchPlayerProps) => {
 
   // Playback — restarted whenever the stream selection generation changes
   useEffect(() => {
-    if (!resolved) {
+    if (!resolved || !mediaReady) {
       return;
     }
     const video = videoRef.current;
@@ -168,15 +198,27 @@ const WatchPlayer = ({ ratingKey, title, onClose }: WatchPlayerProps) => {
       audioBoost: '100',
       hasMDE: '1',
       session,
-      'X-Plex-Client-Identifier': 'rathi-studios-web',
-      'X-Plex-Product': 'Rathi Studios',
-      'X-Plex-Platform': 'Chrome',
-      'X-Plex-Device': 'Browser',
+      ...PLEX_CLIENT_PARAMS,
     });
     const src = mediaUrl('/video/:/transcode/universal/start.m3u8', params);
 
     let hls: Hls | undefined;
     let cancelled = false;
+
+    const onLoadedMetadata = () => {
+      // After a stream switch, continue where we were; on first start,
+      // pick up Plex's saved position
+      const continueAt = continueAtRef.current;
+      continueAtRef.current = null;
+      if (continueAt != null && continueAt > 0) {
+        video.currentTime = continueAt;
+      } else if (resumeMs > 0 && !appliedResumeRef.current) {
+        appliedResumeRef.current = true;
+        video.currentTime = resumeMs / 1000;
+        setResumed(true);
+      }
+    };
+    video.addEventListener('loadedmetadata', onLoadedMetadata);
 
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Safari plays HLS natively
@@ -196,8 +238,42 @@ const WatchPlayer = ({ ratingKey, title, onClose }: WatchPlayerProps) => {
       });
     }
 
+    // Report progress to Plex so watch state and resume positions stay
+    // in sync with the rest of the Plex ecosystem
+    const report = (state: 'playing' | 'paused' | 'stopped') => {
+      if (!durationMs) {
+        return;
+      }
+      const timelineParams = new URLSearchParams({
+        ratingKey,
+        key: `/library/metadata/${ratingKey}`,
+        identifier: 'com.plexapp.plugins.library',
+        state,
+        time: `${Math.max(0, Math.floor(video.currentTime * 1000))}`,
+        duration: `${durationMs}`,
+        ...PLEX_CLIENT_PARAMS,
+      });
+      fetch(mediaUrl('/:/timeline', timelineParams), {
+        keepalive: state === 'stopped',
+      }).catch(() => undefined);
+    };
+    const reportInterval = setInterval(() => {
+      if (!video.paused && !video.ended) {
+        report('playing');
+      }
+    }, 10_000);
+    const onPause = () => report('paused');
+    const onEnded = () => report('stopped');
+    video.addEventListener('pause', onPause);
+    video.addEventListener('ended', onEnded);
+
     return () => {
       cancelled = true;
+      report('stopped');
+      clearInterval(reportInterval);
+      video.removeEventListener('loadedmetadata', onLoadedMetadata);
+      video.removeEventListener('pause', onPause);
+      video.removeEventListener('ended', onEnded);
       hls?.destroy();
       video.removeAttribute('src');
       // Tell Plex to tear down this transcode session
@@ -207,7 +283,7 @@ const WatchPlayer = ({ ratingKey, title, onClose }: WatchPlayerProps) => {
       }).catch(() => undefined);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolved, directBase, token, ratingKey, generation]);
+  }, [resolved, mediaReady, directBase, token, ratingKey, generation]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -229,6 +305,7 @@ const WatchPlayer = ({ ratingKey, title, onClose }: WatchPlayerProps) => {
       await fetch(mediaUrl(`/library/parts/${partId}`, params), {
         method: 'PUT',
       });
+      continueAtRef.current = videoRef.current?.currentTime ?? null;
       if (kind === 'audio') {
         setAudioId(id);
       } else {
@@ -240,6 +317,24 @@ const WatchPlayer = ({ ratingKey, title, onClose }: WatchPlayerProps) => {
     }
   };
 
+  const startOver = () => {
+    const video = videoRef.current;
+    if (video) {
+      video.currentTime = 0;
+      setResumed(false);
+    }
+  };
+
+  const formatMs = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const sec = totalSeconds % 60;
+    return h > 0
+      ? `${h}:${`${m}`.padStart(2, '0')}:${`${sec}`.padStart(2, '0')}`
+      : `${m}:${`${sec}`.padStart(2, '0')}`;
+  };
+
   const selectClasses =
     'rounded border border-gray-700 bg-gray-900 px-2 py-1 text-sm text-gray-200 focus:border-gray-400 focus:outline-none';
 
@@ -249,6 +344,15 @@ const WatchPlayer = ({ ratingKey, title, onClose }: WatchPlayerProps) => {
         <span className="min-w-0 flex-1 truncate text-lg font-semibold text-white">
           {title}
         </span>
+        {resumed && (
+          <button
+            type="button"
+            className="rounded border border-gray-700 px-2 py-1 text-sm text-gray-300 transition hover:border-gray-400 hover:text-white"
+            onClick={startOver}
+          >
+            Resumed from {formatMs(resumeMs)} · Start over
+          </button>
+        )}
         {audioStreams.length > 1 && (
           <label className="flex items-center gap-2 text-sm text-gray-400">
             Audio
