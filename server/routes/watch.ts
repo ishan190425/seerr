@@ -18,16 +18,28 @@ const ALLOWED_GET_PREFIXES = [
 // PUT is only for audio/subtitle stream selection on a part
 const ALLOWED_PUT_PATTERN = /^library\/parts\/\d+$/;
 
-const resolveToken = async (req: Request): Promise<string | undefined> => {
-  if (req.user?.plexToken) {
-    return req.user.plexToken;
+// plexToken is a select:false column, so it is never present on req.user
+// and must be fetched explicitly
+const getUserPlexToken = async (
+  userId: number | undefined
+): Promise<string | null> => {
+  if (!userId) {
+    return null;
   }
   const userRepository = getRepository(User);
-  const owner = await userRepository.findOne({
+  const found = await userRepository.findOne({
     select: { id: true, plexToken: true },
-    where: { id: 1 },
+    where: { id: userId },
   });
-  return owner?.plexToken ?? undefined;
+  return found?.plexToken ?? null;
+};
+
+const resolveToken = async (req: Request): Promise<string | undefined> => {
+  const userToken = await getUserPlexToken(req.user?.id);
+  if (userToken) {
+    return userToken;
+  }
+  return (await getUserPlexToken(1)) ?? undefined;
 };
 
 interface PlexConnection {
@@ -45,7 +57,7 @@ const CONNECTION_CACHE_TTL = 10 * 60 * 1000;
 // never sent to a browser.
 watchRoutes.get('/streaminfo', async (req, res) => {
   const settings = getSettings();
-  const userToken = req.user?.plexToken ?? null;
+  const userToken = await getUserPlexToken(req.user?.id);
 
   let connections: PlexConnection[] = [];
   try {
