@@ -26,6 +26,7 @@ import Slider from '@app/components/Slider';
 import StatusBadge from '@app/components/StatusBadge';
 import Season from '@app/components/TvDetails/Season';
 import useDeepLinks from '@app/hooks/useDeepLinks';
+import WatchTvModal from '@app/components/WatchTvModal';
 import useLocale from '@app/hooks/useLocale';
 import useSettings from '@app/hooks/useSettings';
 import useToasts from '@app/hooks/useToasts';
@@ -79,6 +80,7 @@ const messages = defineMessages('components.TvDetails', {
   recommendations: 'Recommendations',
   similar: 'Similar Series',
   watchtrailer: 'Watch Trailer',
+  watchnow: 'Watch Now',
   overviewunavailable: 'Overview unavailable.',
   originaltitle: 'Original Title',
   showtype: 'Series Type',
@@ -126,6 +128,7 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showManager, setShowManager] = useState(false);
   const [showIssueModal, setShowIssueModal] = useState(false);
+  const [showWatchModal, setShowWatchModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
   const [toggleWatchlist, setToggleWatchlist] = useState<boolean>(
     !tv?.onUserWatchlist
@@ -190,6 +193,17 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
   }
 
   const mediaLinks: PlayButtonLink[] = [];
+
+  const watchRatingKey =
+    data.mediaInfo?.ratingKey ?? data.mediaInfo?.ratingKey4k;
+
+  if (watchRatingKey) {
+    mediaLinks.push({
+      text: intl.formatMessage(messages.watchnow),
+      onClick: () => setShowWatchModal(true),
+      svg: <PlayIcon />,
+    });
+  }
 
   if (
     plexUrl &&
@@ -482,6 +496,13 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
         height: 493,
       }}
     >
+      {showWatchModal && watchRatingKey && (
+        <WatchTvModal
+          ratingKey={watchRatingKey}
+          title={data.name}
+          onClose={() => setShowWatchModal(false)}
+        />
+      )}
       {data.backdropPath && (
         <div className="media-page-bg-image">
           <CachedImage

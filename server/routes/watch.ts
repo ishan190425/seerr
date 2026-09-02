@@ -2,40 +2,104 @@ import { getRepository } from '@server/datasource';
 import { User } from '@server/entity/User';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
+import type { Request, Response } from 'express';
 import { Router } from 'express';
 import http from 'http';
 import https from 'https';
 
 const watchRoutes = Router();
 
-// Only the Plex paths needed for HLS playback may be proxied
-const ALLOWED_PREFIXES = [
+// Only the Plex paths needed for playback may be proxied
+const ALLOWED_GET_PREFIXES = [
   'video/:/transcode/universal/',
   'library/parts/',
+  'library/metadata/',
 ];
+// PUT is only for audio/subtitle stream selection on a part
+const ALLOWED_PUT_PATTERN = /^library\/parts\/\d+$/;
 
-// Proxy streaming requests to the Plex server, attaching the requesting
-// user's Plex token server-side so it never reaches the browser.
-watchRoutes.get(/^\/plex\/(.*)$/, async (req, res) => {
-  const plexPath = req.params[0] ?? '';
-
-  if (!ALLOWED_PREFIXES.some((prefix) => plexPath.startsWith(prefix))) {
-    return res.status(403).json({ error: 'Path not allowed' });
+const resolveToken = async (req: Request): Promise<string | undefined> => {
+  if (req.user?.plexToken) {
+    return req.user.plexToken;
   }
+  const userRepository = getRepository(User);
+  const owner = await userRepository.findOne({
+    select: { id: true, plexToken: true },
+    where: { id: 1 },
+  });
+  return owner?.plexToken ?? undefined;
+};
 
-  let token = req.user?.plexToken;
-  if (!token) {
-    const userRepository = getRepository(User);
-    const owner = await userRepository.findOne({
-      select: { id: true, plexToken: true },
-      where: { id: 1 },
+interface PlexConnection {
+  uri: string;
+  local: boolean;
+}
+
+let cachedConnections: PlexConnection[] | null = null;
+let cachedConnectionsAt = 0;
+const CONNECTION_CACHE_TTL = 10 * 60 * 1000;
+
+// Direct-play info: plex.direct connection URIs for this server plus the
+// requesting user's own Plex token. Users without a Plex token of their own
+// get no token and fall back to the server-side proxy — the owner's token is
+// never sent to a browser.
+watchRoutes.get('/streaminfo', async (req, res) => {
+  const settings = getSettings();
+  const userToken = req.user?.plexToken ?? null;
+
+  let connections: PlexConnection[] = [];
+  try {
+    if (
+      cachedConnections &&
+      Date.now() - cachedConnectionsAt < CONNECTION_CACHE_TTL
+    ) {
+      connections = cachedConnections;
+    } else {
+      const ownerToken = await resolveToken(req);
+      if (ownerToken) {
+        const response = await fetch(
+          `https://plex.tv/api/v2/resources?includeHttps=1&X-Plex-Token=${ownerToken}&X-Plex-Client-Identifier=rathi-studios-web`,
+          { headers: { accept: 'application/json' } }
+        );
+        if (response.ok) {
+          const resources = (await response.json()) as {
+            provides: string;
+            clientIdentifier: string;
+            connections: (PlexConnection & { relay?: boolean })[];
+          }[];
+          const server = resources.find(
+            (r) =>
+              r.provides.includes('server') &&
+              r.clientIdentifier === settings.plex.machineId
+          );
+          connections = (server?.connections ?? [])
+            .filter((c) => !c.relay)
+            .map((c) => ({ uri: c.uri, local: c.local }));
+          cachedConnections = connections;
+          cachedConnectionsAt = Date.now();
+        }
+      }
+    }
+  } catch (e) {
+    logger.warn('Failed to fetch plex.tv resources for direct streaming', {
+      label: 'Watch',
+      errorMessage: (e as Error).message,
     });
-    token = owner?.plexToken ?? undefined;
-  }
-  if (!token) {
-    return res.status(500).json({ error: 'No Plex token available' });
   }
 
+  return res.status(200).json({
+    token: userToken,
+    connections: userToken ? connections : [],
+  });
+});
+
+const proxyToPlex = (
+  req: Request,
+  res: Response,
+  plexPath: string,
+  token: string,
+  method: 'GET' | 'PUT'
+) => {
   const settings = getSettings();
   const { ip, port, useSsl } = settings.plex;
 
@@ -53,10 +117,11 @@ watchRoutes.get(/^\/plex\/(.*)$/, async (req, res) => {
       hostname: ip,
       port,
       path: `/${encodeURI(plexPath)}?${query.toString()}`,
-      method: 'GET',
+      method,
       headers: {
         ...(req.headers.range ? { range: req.headers.range } : {}),
-        accept: '*/*',
+        accept:
+          typeof req.headers.accept === 'string' ? req.headers.accept : '*/*',
       },
     },
     (proxyRes) => {
@@ -94,6 +159,39 @@ watchRoutes.get(/^\/plex\/(.*)$/, async (req, res) => {
   });
 
   proxyReq.end();
+};
+
+// Proxy streaming/metadata requests to the Plex server, attaching the
+// requesting user's Plex token server-side so it never reaches the browser.
+watchRoutes.get(/^\/plex\/(.*)$/, async (req, res) => {
+  const plexPath = req.params[0] ?? '';
+
+  if (!ALLOWED_GET_PREFIXES.some((prefix) => plexPath.startsWith(prefix))) {
+    return res.status(403).json({ error: 'Path not allowed' });
+  }
+
+  const token = await resolveToken(req);
+  if (!token) {
+    return res.status(500).json({ error: 'No Plex token available' });
+  }
+
+  return proxyToPlex(req, res, plexPath, token, 'GET');
+});
+
+// Audio/subtitle stream selection
+watchRoutes.put(/^\/plex\/(.*)$/, async (req, res) => {
+  const plexPath = req.params[0] ?? '';
+
+  if (!ALLOWED_PUT_PATTERN.test(plexPath)) {
+    return res.status(403).json({ error: 'Path not allowed' });
+  }
+
+  const token = await resolveToken(req);
+  if (!token) {
+    return res.status(500).json({ error: 'No Plex token available' });
+  }
+
+  return proxyToPlex(req, res, plexPath, token, 'PUT');
 });
 
 export default watchRoutes;
