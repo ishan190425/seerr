@@ -4,6 +4,7 @@ import useClickOutside from '@app/hooks/useClickOutside';
 import { Permission, useUser } from '@app/hooks/useUser';
 import { Transition } from '@headlessui/react';
 import {
+  BoltIcon,
   ClockIcon,
   CogIcon,
   EllipsisHorizontalIcon,
@@ -16,6 +17,7 @@ import {
   SignalIcon,
 } from '@heroicons/react/24/outline';
 import {
+  BoltIcon as FilledBoltIcon,
   ClockIcon as FilledClockIcon,
   CogIcon as FilledCogIcon,
   ExclamationTriangleIcon as FilledExclamationTriangleIcon,
@@ -100,6 +102,13 @@ const MobileMenu = ({
       svgIcon: <ClockIcon className="h-6 w-6" />,
       svgIconSelected: <FilledClockIcon className="h-6 w-6" />,
       activeRegExp: /^\/requests/,
+    },
+    {
+      href: '/feed',
+      content: intl.formatMessage(menuMessages.feed),
+      svgIcon: <BoltIcon className="h-6 w-6" />,
+      svgIconSelected: <FilledBoltIcon className="h-6 w-6" />,
+      activeRegExp: /^\/feed/,
     },
     {
       href: '/activity',
