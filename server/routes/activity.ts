@@ -4,9 +4,10 @@ import { User } from '@server/entity/User';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import { spawn } from 'child_process';
+import type { Request, Response } from 'express';
 import { Router } from 'express';
 
-const getAdminPlex = async (): Promise<{
+export const getAdminPlex = async (): Promise<{
   plexClient: PlexAPI;
   plexToken: string;
 } | null> => {
@@ -400,7 +401,7 @@ activityRoutes.get('/arrivals', async (req, res) => {
   }
 });
 
-activityRoutes.get('/image', async (req, res) => {
+export const plexImageHandler = async (req: Request, res: Response) => {
   try {
     const imagePath = req.query.path as string;
     if (
@@ -433,7 +434,9 @@ activityRoutes.get('/image', async (req, res) => {
   } catch (e) {
     return res.status(500).send('error');
   }
-});
+};
+
+activityRoutes.get('/image', plexImageHandler);
 
 export interface ActivityHistoryItem {
   user: string;

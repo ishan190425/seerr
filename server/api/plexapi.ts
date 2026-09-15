@@ -260,12 +260,20 @@ class PlexAPI extends ExternalAPI {
     return response.MediaContainer.Metadata ?? [];
   }
 
-  public async getWatchHistory(size = 20): Promise<PlexHistoryMetadata[]> {
+  public async getWatchHistory(
+    size = 20,
+    start = 0
+  ): Promise<PlexHistoryMetadata[]> {
     const response = await this.get<{
       MediaContainer: { Metadata?: PlexHistoryMetadata[] };
     }>(
       '/status/sessions/history/all?sort=viewedAt:desc',
-      { headers: { 'X-Plex-Container-Start': '0', 'X-Plex-Container-Size': String(size) } },
+      {
+        headers: {
+          'X-Plex-Container-Start': String(start),
+          'X-Plex-Container-Size': String(size),
+        },
+      },
       0
     );
 

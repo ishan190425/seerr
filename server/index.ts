@@ -249,7 +249,7 @@ app
         validateRequests: true,
         // Plex stream proxy paths are multi-segment and can't be described
         // with OpenAPI path templating
-        ignorePaths: /^\/api\/v1\/watch\//,
+        ignorePaths: /^\/api\/v1\/(watch|feed)\//,
       })
     );
     /**
