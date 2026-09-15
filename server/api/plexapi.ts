@@ -59,9 +59,23 @@ interface PlexLibrariesResponse {
 export interface PlexMetadata {
   ratingKey: string;
   parentRatingKey?: string;
+  grandparentRatingKey?: string;
   guid: string;
-  type: 'movie' | 'show' | 'season';
+  type: 'movie' | 'show' | 'season' | 'episode';
   title: string;
+  grandparentTitle?: string;
+  year?: number;
+  duration?: number;
+  rating?: number;
+  audienceRating?: number;
+  contentRating?: string;
+  thumb?: string;
+  art?: string;
+  grandparentThumb?: string;
+  grandparentArt?: string;
+  Genre?: {
+    tag: string;
+  }[];
   Guid: {
     id: string;
   }[];
@@ -92,6 +106,9 @@ interface Media {
   container: string;
   videoFrameRate: string;
   videoProfile: string;
+  Part?: {
+    file?: string;
+  }[];
 }
 
 interface PlexMetadataResponse {
@@ -326,6 +343,10 @@ interface PlexSessionsResponse {
 
 export interface PlexHistoryMetadata {
   type: string;
+  ratingKey?: string;
+  key?: string;
+  parentKey?: string;
+  grandparentKey?: string;
   title: string;
   grandparentTitle?: string;
   parentIndex?: number;

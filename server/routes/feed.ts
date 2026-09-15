@@ -1,3 +1,4 @@
+import type { PlexMetadata } from '@server/api/plexapi';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import { Router } from 'express';
@@ -13,6 +14,19 @@ export interface FeedEvent {
   user?: string;
   at: number;
   thumb?: string;
+  /** Plex rating keys used to enrich the event lazily (never sent to clients) */
+  itemKey?: string;
+  showKey?: string;
+  // Enriched, notification-style fields (filled in per page)
+  season?: number;
+  episode?: number;
+  year?: number;
+  quality?: string;
+  runtime?: number;
+  imdbId?: string;
+  rating?: number;
+  genres?: string[];
+  art?: string;
 }
 
 // The merged feed is rebuilt at most once a minute and paginated from
@@ -23,6 +37,98 @@ let building: Promise<void> | null = null;
 const FEED_CACHE_TTL = 60_000;
 const HISTORY_DEPTH = 1000;
 const ARRIVALS_DAYS = 120;
+
+// Item metadata rarely changes, so cache it for a long time keyed by ratingKey
+const metadataCache = new Map<string, Promise<PlexMetadata | null>>();
+const METADATA_CACHE_MAX = 5000;
+
+const ratingKeyFromKey = (key?: string): string | undefined =>
+  key?.match(/\/library\/metadata\/(\d+)/)?.[1];
+
+const getCachedMetadata = (
+  fetcher: (key: string) => Promise<PlexMetadata>,
+  key: string
+): Promise<PlexMetadata | null> => {
+  let cached = metadataCache.get(key);
+  if (!cached) {
+    if (metadataCache.size >= METADATA_CACHE_MAX) {
+      metadataCache.clear();
+    }
+    cached = fetcher(key).catch(() => null);
+    metadataCache.set(key, cached);
+  }
+  return cached;
+};
+
+const SOURCE_TAGS: [RegExp, string][] = [
+  [/\bremux\b/i, 'Remux'],
+  [/\bweb[-. ]?dl\b/i, 'WEBDL'],
+  [/\bweb[-. ]?rip\b/i, 'WEBRip'],
+  [/\bweb\b/i, 'WEB'],
+  [/\b(blu[-. ]?ray|bdrip|brrip)\b/i, 'Bluray'],
+  [/\bhdtv\b/i, 'HDTV'],
+  [/\b(dvd|dvdrip)\b/i, 'DVD'],
+];
+
+const RESOLUTIONS: Record<string, string> = {
+  '4k': '2160p',
+  '2160': '2160p',
+  '1080': '1080p',
+  '720': '720p',
+  '576': '576p',
+  '480': '480p',
+  sd: 'SD',
+};
+
+const qualityLabel = (item: PlexMetadata): string | undefined => {
+  const media = item.Media?.[0];
+  if (!media) {
+    return undefined;
+  }
+  const resolution = media.videoResolution
+    ? (RESOLUTIONS[media.videoResolution.toLowerCase()] ??
+      `${media.videoResolution}p`)
+    : undefined;
+  const file = media.Part?.[0]?.file ?? '';
+  const source = SOURCE_TAGS.find(([re]) => re.test(file))?.[1];
+  return [source, resolution].filter(Boolean).join('-') || undefined;
+};
+
+const imdbIdOf = (item?: PlexMetadata | null): string | undefined =>
+  item?.Guid?.find((g) => g.id.startsWith('imdb://'))?.id.replace(
+    'imdb://',
+    ''
+  );
+
+const enrichEvent = async (
+  fetcher: (key: string) => Promise<PlexMetadata>,
+  event: FeedEvent
+): Promise<FeedEvent> => {
+  const { itemKey, showKey, ...publicEvent } = event;
+  if (!itemKey) {
+    return publicEvent;
+  }
+  const [item, show] = await Promise.all([
+    getCachedMetadata(fetcher, itemKey),
+    showKey ? getCachedMetadata(fetcher, showKey) : Promise.resolve(null),
+  ]);
+  if (!item) {
+    return publicEvent;
+  }
+  // Rating, genres and the IMDb id come from the series for episodes
+  const info = show ?? item;
+  return {
+    ...publicEvent,
+    year: info.year ?? publicEvent.year,
+    quality: qualityLabel(item),
+    runtime: item.duration ? Math.round(item.duration / 60_000) : undefined,
+    imdbId: imdbIdOf(show) ?? imdbIdOf(item),
+    rating: info.audienceRating ?? info.rating,
+    genres: info.Genre?.slice(0, 3).map((g) => g.tag),
+    art: info.art ?? item.grandparentArt ?? item.art,
+    thumb: publicEvent.thumb ?? info.thumb,
+  };
+};
 
 const buildFeed = async (): Promise<void> => {
   const plex = await getAdminPlex();
@@ -49,41 +155,38 @@ const buildFeed = async (): Promise<void> => {
   const events: FeedEvent[] = [];
 
   for (const item of history) {
+    const isEpisode = item.type === 'episode';
     events.push({
       kind: 'watched',
       mediaType: item.type,
-      title:
-        item.type === 'episode'
-          ? item.grandparentTitle ?? item.title
-          : item.title,
-      subtitle:
-        item.type === 'episode'
-          ? `S${item.parentIndex ?? '?'}E${item.index ?? '?'} · ${item.title}`
-          : undefined,
+      title: isEpisode ? (item.grandparentTitle ?? item.title) : item.title,
+      subtitle: isEpisode ? item.title : undefined,
+      season: isEpisode ? item.parentIndex : undefined,
+      episode: isEpisode ? item.index : undefined,
       user:
         (item.accountID != null ? accounts.get(item.accountID) : undefined) ??
         'Someone',
       at: item.viewedAt * 1000,
       thumb: item.grandparentThumb ?? item.parentThumb ?? item.thumb,
+      itemKey: item.ratingKey ?? ratingKeyFromKey(item.key),
+      showKey: isEpisode ? ratingKeyFromKey(item.grandparentKey) : undefined,
     });
   }
 
   for (const item of libraryItems.flat()) {
+    const isEpisode = item.type === 'episode';
     events.push({
       kind: 'added',
       mediaType: item.type,
-      title:
-        item.type === 'episode'
-          ? item.grandparentTitle ?? item.title
-          : item.title,
-      subtitle:
-        item.type === 'episode'
-          ? `S${item.parentIndex ?? '?'}E${item.index ?? '?'} · ${item.title}`
-          : item.year
-            ? String(item.year)
-            : undefined,
+      title: isEpisode ? (item.grandparentTitle ?? item.title) : item.title,
+      subtitle: isEpisode ? item.title : undefined,
+      season: isEpisode ? item.parentIndex : undefined,
+      episode: isEpisode ? item.index : undefined,
+      year: item.year,
       at: item.addedAt * 1000,
       thumb: item.grandparentThumb ?? item.parentThumb ?? item.thumb,
+      itemKey: item.ratingKey,
+      showKey: isEpisode ? item.grandparentRatingKey : undefined,
     });
   }
 
@@ -102,7 +205,17 @@ feedRoutes.get('/', async (req, res) => {
 
     const offset = Math.max(0, Number(req.query.offset) || 0);
     const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
-    const events = cachedFeed.slice(offset, offset + limit);
+    const page = cachedFeed.slice(offset, offset + limit);
+
+    // Enrich only the requested page; metadata is cached across requests
+    const plex = await getAdminPlex();
+    const fetcher = (key: string) =>
+      plex
+        ? plex.plexClient.getMetadata(key)
+        : Promise.reject(new Error('plex not configured'));
+    const events = await Promise.all(
+      page.map((event) => enrichEvent(fetcher, event))
+    );
 
     return res.status(200).json({
       events,

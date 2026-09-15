@@ -11,10 +11,10 @@ import {
   ExclamationTriangleIcon,
   EyeSlashIcon,
   FilmIcon,
+  SignalIcon,
   SparklesIcon,
   TvIcon,
   UsersIcon,
-  SignalIcon,
 } from '@heroicons/react/24/outline';
 import {
   BoltIcon as FilledBoltIcon,
@@ -23,11 +23,11 @@ import {
   ExclamationTriangleIcon as FilledExclamationTriangleIcon,
   EyeSlashIcon as FilledEyeSlashIcon,
   FilmIcon as FilledFilmIcon,
+  SignalIcon as FilledSignalIcon,
   SparklesIcon as FilledSparklesIcon,
   TvIcon as FilledTvIcon,
   UsersIcon as FilledUsersIcon,
   XMarkIcon,
-  SignalIcon as FilledSignalIcon,
 } from '@heroicons/react/24/solid';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -245,9 +245,9 @@ const MobileMenu = ({
         })}
       </Transition>
       <div className="padding-bottom-safe border-t border-gray-600 bg-gray-800/90 backdrop-blur">
-        <div className="flex h-full items-center justify-between px-6 py-4 text-gray-100">
+        <div className="flex h-full items-center justify-between px-4 py-4 text-gray-100">
           {filteredLinks
-            .slice(0, filteredLinks.length === 5 ? 5 : 4)
+            .slice(0, filteredLinks.length === 6 ? 6 : 5)
             .map((link) => {
               const isActive =
                 router.pathname.match(link.activeRegExp) && !isOpen;
@@ -287,7 +287,7 @@ const MobileMenu = ({
                 </Link>
               );
             })}
-          {filteredLinks.length > 4 && filteredLinks.length !== 5 && (
+          {filteredLinks.length > 5 && filteredLinks.length !== 6 && (
             <button
               className={`flex flex-col items-center space-y-1 ${
                 isOpen ? 'text-indigo-500' : ''
