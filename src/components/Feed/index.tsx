@@ -268,11 +268,7 @@ const Feed = () => {
                       src={plexImage(image)}
                       alt=""
                       loading="lazy"
-                      className={`w-full ${
-                        event.art
-                          ? 'aspect-video object-cover'
-                          : 'max-h-96 object-contain'
-                      }`}
+                      className="h-auto w-full"
                     />
                   </a>
                 )}
