@@ -314,7 +314,7 @@ const Feed = () => {
                     href={imdbUrl}
                     target={imdbUrl ? '_blank' : undefined}
                     rel="noreferrer"
-                    className={`block bg-gray-900 ${
+                    className={`block max-h-[50svh] w-full bg-gray-900 ${
                       image === event.thumb ? 'aspect-[2/3]' : 'aspect-video'
                     }`}
                   >
