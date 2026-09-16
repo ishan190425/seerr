@@ -30,6 +30,7 @@ type NotificationAgentTypes = Record<NotificationAgentKey, number>;
 
 export interface UserSettings {
   discoverRegion?: string;
+  startPage?: string;
   streamingRegion?: string;
   originalLanguage?: string;
   locale?: string;

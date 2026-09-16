@@ -47,6 +47,9 @@ export class UserSettings {
   public discoverRegion?: string;
 
   @Column({ nullable: true })
+  public startPage?: string;
+
+  @Column({ nullable: true })
   public streamingRegion?: string;
 
   @Column({ nullable: true })

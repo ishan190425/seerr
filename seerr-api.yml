@@ -156,6 +156,11 @@ components:
           type: string
           nullable: true
           example: 'US'
+        startPage:
+          type: string
+          nullable: true
+          description: 'Page the app opens to (path, e.g. /feed)'
+          example: '/feed'
         streamingRegion:
           type: string
           nullable: true

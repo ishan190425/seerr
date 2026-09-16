@@ -2,7 +2,13 @@ import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
 import defineMessages from '@app/utils/defineMessages';
 import { EyeIcon, FolderPlusIcon } from '@heroicons/react/24/solid';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Feed', {
@@ -120,6 +126,9 @@ const Feed = () => {
   const loadingRef = useRef(false);
   const offsetRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  // Height of the page before older items were prepended, so we can keep
+  // the viewport still (iOS Safari has no scroll anchoring)
+  const prependHeightRef = useRef<number | null>(null);
 
   const loadMore = useCallback(async () => {
     if (loadingRef.current) {
@@ -132,6 +141,9 @@ const Feed = () => {
       );
       const data = await res.json();
       const newEvents: FeedEvent[] = data.events ?? [];
+      if (offsetRef.current > 0) {
+        prependHeightRef.current = document.documentElement.scrollHeight;
+      }
       offsetRef.current += newEvents.length;
       setEvents((prev) => [...prev, ...newEvents]);
       setHasMore(Boolean(data.hasMore) && newEvents.length > 0);
@@ -145,6 +157,21 @@ const Feed = () => {
   useEffect(() => {
     loadMore();
   }, [loadMore]);
+
+  useLayoutEffect(() => {
+    if (events.length === 0) {
+      return;
+    }
+    const prevHeight = prependHeightRef.current;
+    prependHeightRef.current = null;
+    if (prevHeight == null) {
+      // Chat-style: start at the newest event, at the bottom of the page
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      return;
+    }
+    // Older items were added above: shift by the height they added
+    window.scrollBy(0, document.documentElement.scrollHeight - prevHeight);
+  }, [events]);
 
   // Endless scroll: load the next page when the sentinel nears the viewport
   useEffect(() => {
@@ -172,13 +199,13 @@ const Feed = () => {
           {intl.formatMessage(messages.feed)}
         </h1>
       </div>
-      <div className="flex flex-col gap-3 pb-8">
+      <div className="flex flex-col-reverse gap-3 pb-8">
         {events.map((event, index) => {
           const isEpisode = event.mediaType === 'episode';
           const imdbUrl = event.imdbId
             ? `https://www.imdb.com/title/${event.imdbId}/`
             : undefined;
-          const image = event.art ?? event.thumb;
+          const image = event.thumb ?? event.art;
           const meta = [
             event.rating != null ? `\u2b50 ${event.rating.toFixed(1)}` : null,
             event.genres?.length ? event.genres.join(', ') : null,
@@ -261,14 +288,16 @@ const Feed = () => {
                     href={imdbUrl}
                     target={imdbUrl ? '_blank' : undefined}
                     rel="noreferrer"
-                    className="block bg-gray-900"
+                    className={`block bg-gray-900 ${
+                      image === event.thumb ? 'aspect-[2/3]' : 'aspect-video'
+                    }`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={plexImage(image)}
                       alt=""
                       loading="lazy"
-                      className="h-auto w-full"
+                      className="h-full w-full object-contain"
                     />
                   </a>
                 )}

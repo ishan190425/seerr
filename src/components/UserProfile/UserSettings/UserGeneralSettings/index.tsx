@@ -52,6 +52,13 @@ const messages = defineMessages(
     regionTip: 'Filter content by regional availability',
     discoverRegion: 'Discover Region',
     discoverRegionTip: 'Filter content by regional availability',
+    startPage: 'Start Page',
+    startPageTip: 'The page the app opens to',
+    startPageDiscover: 'Discover',
+    startPageMovies: 'Movies',
+    startPageTv: 'Series',
+    startPageRequests: 'Requests',
+    startPageFeed: 'Feed',
     originallanguage: 'Discover Language',
     originallanguageTip: 'Filter content by original language',
     streamingRegion: 'Streaming Region',
@@ -71,6 +78,14 @@ const messages = defineMessages(
       'Automatically request series on your <PlexWatchlistSupportLink>Plex Watchlist</PlexWatchlistSupportLink>',
   }
 );
+
+const START_PAGES = [
+  { path: '', label: messages.startPageDiscover },
+  { path: '/discover/movies', label: messages.startPageMovies },
+  { path: '/discover/tv', label: messages.startPageTv },
+  { path: '/requests', label: messages.startPageRequests },
+  { path: '/feed', label: messages.startPageFeed },
+];
 
 const UserGeneralSettings = () => {
   const intl = useIntl();
@@ -153,6 +168,7 @@ const UserGeneralSettings = () => {
           email: data?.email?.includes('@') ? data.email : '',
           locale: data?.locale,
           discoverRegion: data?.discoverRegion,
+          startPage: data?.startPage ?? '',
           streamingRegion: data?.streamingRegion,
           originalLanguage: data?.originalLanguage,
           movieQuotaLimit: data?.movieQuotaLimit,
@@ -172,6 +188,7 @@ const UserGeneralSettings = () => {
                 values.email || user?.jellyfinUsername || user?.plexUsername,
               locale: values.locale,
               discoverRegion: values.discoverRegion,
+              startPage: values.startPage || null,
               streamingRegion: values.streamingRegion,
               originalLanguage: values.originalLanguage,
               movieQuotaLimit: movieQuotaEnabled
@@ -356,6 +373,25 @@ const UserGeneralSettings = () => {
                           lang={availableLanguages[key].code}
                         >
                           {availableLanguages[key].display}
+                        </option>
+                      ))}
+                    </Field>
+                  </div>
+                </div>
+              </div>
+              <div className="form-row">
+                <label htmlFor="startPage" className="text-label">
+                  <span>{intl.formatMessage(messages.startPage)}</span>
+                  <span className="label-tip">
+                    {intl.formatMessage(messages.startPageTip)}
+                  </span>
+                </label>
+                <div className="form-input-area">
+                  <div className="form-input-field">
+                    <Field as="select" id="startPage" name="startPage">
+                      {START_PAGES.map((page) => (
+                        <option key={page.path} value={page.path}>
+                          {intl.formatMessage(page.label)}
                         </option>
                       ))}
                     </Field>

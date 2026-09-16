@@ -5,6 +5,7 @@ export interface UserSettingsGeneralResponse {
   email?: string;
   locale?: string;
   discoverRegion?: string;
+  startPage?: string;
   streamingRegion?: string;
   originalLanguage?: string;
   movieQuotaLimit?: number;
