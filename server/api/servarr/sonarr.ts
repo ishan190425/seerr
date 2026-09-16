@@ -109,6 +109,29 @@ export interface LanguageProfile {
   name: string;
 }
 
+export interface SonarrHistoryRecord {
+  id: number;
+  episodeId: number;
+  seriesId: number;
+  date: string;
+  eventType: string;
+  quality?: { quality?: { name?: string } };
+  data?: { reason?: string };
+  series?: {
+    title: string;
+    year?: number;
+    runtime?: number;
+    tvdbId?: number;
+    tmdbId?: number;
+  };
+  episode?: {
+    title: string;
+    seasonNumber: number;
+    episodeNumber: number;
+    runtime?: number;
+  };
+}
+
 class SonarrAPI extends ServarrBase<{
   seriesId: number;
   episodeId: number;
@@ -142,6 +165,12 @@ class SonarrAPI extends ServarrBase<{
       );
     }
   }
+
+  public getHistory = (pageSize = 500): Promise<SonarrHistoryRecord[]> =>
+    this.getHistoryRecords<SonarrHistoryRecord>(pageSize, {
+      includeSeries: true,
+      includeEpisode: true,
+    });
 
   public async getSeriesByTitle(title: string): Promise<SonarrSeries[]> {
     try {

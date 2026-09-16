@@ -233,6 +233,39 @@ class ServarrBase<QueueItemAppendT> extends ExternalAPI {
     await this.runCommand('RefreshMonitoredDownloads', {});
   }
 
+  /**
+   * Recent history records (newest first). Radarr/Sonarr share the shape;
+   * subclasses add the embedded movie/series/episode via extra params.
+   */
+  protected async getHistoryRecords<T>(
+    pageSize: number,
+    params: Record<string, string | boolean> = {}
+  ): Promise<T[]> {
+    try {
+      const response = await this.get<{ records?: T[] }>(
+        '/history',
+        {
+          params: {
+            page: 1,
+            pageSize,
+            sortKey: 'date',
+            sortDirection: 'descending',
+            ...params,
+          },
+        },
+        60
+      );
+      return response.records ?? [];
+    } catch (e) {
+      throw new Error(
+        `[${this.apiName}] Failed to fetch history: ${e.message}`,
+        {
+          cause: e,
+        }
+      );
+    }
+  }
+
   protected async runCommand(
     commandName: string,
     options: Record<string, unknown>

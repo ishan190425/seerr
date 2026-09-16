@@ -1,7 +1,11 @@
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
 import defineMessages from '@app/utils/defineMessages';
-import { EyeIcon, FolderPlusIcon } from '@heroicons/react/24/solid';
+import {
+  ArrowUpCircleIcon,
+  EyeIcon,
+  FolderPlusIcon,
+} from '@heroicons/react/24/solid';
 import {
   useCallback,
   useEffect,
@@ -15,6 +19,10 @@ const messages = defineMessages('components.Feed', {
   feed: 'Feed',
   watched: 'Watched',
   added: 'Added',
+  upgraded: 'Upgraded',
+  episodeUpgraded: 'Episode Upgraded',
+  movieUpgraded: 'Movie Upgraded',
+  itemUpgraded: 'Upgraded',
   caughtup: "You're all caught up",
   episodeDownloaded: 'Episode Downloaded',
   movieDownloaded: 'Movie Downloaded',
@@ -28,7 +36,7 @@ const messages = defineMessages('components.Feed', {
 });
 
 interface FeedEvent {
-  kind: 'watched' | 'added';
+  kind: 'watched' | 'added' | 'upgraded';
   mediaType: string;
   title: string;
   subtitle?: string;
@@ -63,6 +71,13 @@ const formatRuntime = (minutes: number): string => {
 const headlineFor = (event: FeedEvent) => {
   const isEpisode = event.mediaType === 'episode';
   const isMovie = event.mediaType === 'movie';
+  if (event.kind === 'upgraded') {
+    return isEpisode
+      ? messages.episodeUpgraded
+      : isMovie
+        ? messages.movieUpgraded
+        : messages.itemUpgraded;
+  }
   if (event.kind === 'added') {
     return isEpisode
       ? messages.episodeDownloaded
@@ -226,6 +241,11 @@ const Feed = () => {
                     <span className="flex items-center gap-1 rounded-full bg-indigo-600/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-300">
                       <EyeIcon className="h-3 w-3" />
                       {intl.formatMessage(messages.watched)}
+                    </span>
+                  ) : event.kind === 'upgraded' ? (
+                    <span className="flex items-center gap-1 rounded-full bg-amber-600/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                      <ArrowUpCircleIcon className="h-3 w-3" />
+                      {intl.formatMessage(messages.upgraded)}
                     </span>
                   ) : (
                     <span className="flex items-center gap-1 rounded-full bg-emerald-600/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">

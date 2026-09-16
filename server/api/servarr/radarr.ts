@@ -64,7 +64,27 @@ export interface RadarrMovie {
   };
 }
 
+export interface RadarrHistoryRecord {
+  id: number;
+  movieId: number;
+  date: string;
+  eventType: string;
+  quality?: { quality?: { name?: string } };
+  data?: { reason?: string };
+  movie?: {
+    title: string;
+    year?: number;
+    runtime?: number;
+    tmdbId?: number;
+  };
+}
+
 class RadarrAPI extends ServarrBase<{ movieId: number }> {
+  public getHistory = (pageSize = 500): Promise<RadarrHistoryRecord[]> =>
+    this.getHistoryRecords<RadarrHistoryRecord>(pageSize, {
+      includeMovie: true,
+    });
+
   constructor({ url, apiKey }: { url: string; apiKey: string }) {
     super({ url, apiKey, cacheName: 'radarr', apiName: 'Radarr' });
   }

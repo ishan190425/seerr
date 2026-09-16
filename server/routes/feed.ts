@@ -1,4 +1,9 @@
 import type { PlexMetadata } from '@server/api/plexapi';
+import RadarrAPI from '@server/api/servarr/radarr';
+import SonarrAPI from '@server/api/servarr/sonarr';
+import { MediaType } from '@server/constants/media';
+import { getRepository } from '@server/datasource';
+import Media from '@server/entity/Media';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import { Router } from 'express';
@@ -7,7 +12,7 @@ import { getAdminPlex, plexImageHandler } from './activity';
 const feedRoutes = Router();
 
 export interface FeedEvent {
-  kind: 'watched' | 'added';
+  kind: 'watched' | 'added' | 'upgraded';
   mediaType: string;
   title: string;
   subtitle?: string;
@@ -41,6 +46,170 @@ const ARRIVALS_DAYS = 120;
 // Item metadata rarely changes, so cache it for a long time keyed by ratingKey
 const metadataCache = new Map<string, Promise<PlexMetadata | null>>();
 const METADATA_CACHE_MAX = 5000;
+
+// An import counts as an upgrade when the previous file was deleted for
+// that reason shortly before it
+const UPGRADE_WINDOW_MS = 30 * 60_000;
+
+const isUpgradeImport = (
+  importedAt: number,
+  deletions: number[] | undefined
+): boolean =>
+  Boolean(
+    deletions?.some(
+      (deletedAt) =>
+        deletedAt <= importedAt + 60_000 &&
+        importedAt - deletedAt < UPGRADE_WINDOW_MS
+    )
+  );
+
+/**
+ * Upgrades from Radarr/Sonarr history, matched back to Plex items through
+ * Seerr's media table so they get the same poster/IMDb enrichment
+ */
+const collectUpgrades = async (): Promise<FeedEvent[]> => {
+  const settings = getSettings();
+  const events: FeedEvent[] = [];
+
+  const [radarrResults, sonarrResults] = await Promise.all([
+    Promise.all(
+      settings.radarr.map((instance) =>
+        new RadarrAPI({
+          apiKey: instance.apiKey,
+          url: RadarrAPI.buildUrl(instance, '/api/v3'),
+        })
+          .getHistory()
+          .catch(() => [])
+      )
+    ),
+    Promise.all(
+      settings.sonarr.map((instance) =>
+        new SonarrAPI({
+          apiKey: instance.apiKey,
+          url: SonarrAPI.buildUrl(instance, '/api/v3'),
+        })
+          .getHistory()
+          .catch(() => [])
+      )
+    ),
+  ]);
+
+  const mediaRepository = getRepository(Media);
+
+  for (const records of radarrResults) {
+    const deletions = new Map<number, number[]>();
+    for (const record of records) {
+      if (
+        record.eventType === 'movieFileDeleted' &&
+        record.data?.reason === 'Upgrade'
+      ) {
+        deletions.set(record.movieId, [
+          ...(deletions.get(record.movieId) ?? []),
+          Date.parse(record.date),
+        ]);
+      }
+    }
+    const upgrades = records.filter(
+      (record) =>
+        record.eventType === 'downloadFolderImported' &&
+        record.movie &&
+        isUpgradeImport(Date.parse(record.date), deletions.get(record.movieId))
+    );
+    const tmdbIds = [
+      ...new Set(upgrades.map((r) => r.movie?.tmdbId).filter(Boolean)),
+    ] as number[];
+    const media = tmdbIds.length
+      ? await mediaRepository
+          .createQueryBuilder('media')
+          .where('media.tmdbId IN (:...tmdbIds)', { tmdbIds })
+          .andWhere('media.mediaType = :mediaType', {
+            mediaType: MediaType.MOVIE,
+          })
+          .getMany()
+      : [];
+    const keyByTmdb = new Map(
+      media.map((m) => [m.tmdbId, m.ratingKey ?? m.ratingKey4k ?? undefined])
+    );
+    for (const record of upgrades) {
+      const movie = record.movie;
+      if (!movie) {
+        continue;
+      }
+      events.push({
+        kind: 'upgraded',
+        mediaType: 'movie',
+        title: movie.title,
+        year: movie.year,
+        quality: record.quality?.quality?.name,
+        runtime: movie.runtime || undefined,
+        at: Date.parse(record.date),
+        itemKey: movie.tmdbId ? keyByTmdb.get(movie.tmdbId) : undefined,
+      });
+    }
+  }
+
+  for (const records of sonarrResults) {
+    const deletions = new Map<number, number[]>();
+    for (const record of records) {
+      if (
+        record.eventType === 'episodeFileDeleted' &&
+        record.data?.reason === 'Upgrade'
+      ) {
+        deletions.set(record.episodeId, [
+          ...(deletions.get(record.episodeId) ?? []),
+          Date.parse(record.date),
+        ]);
+      }
+    }
+    const upgrades = records.filter(
+      (record) =>
+        record.eventType === 'downloadFolderImported' &&
+        record.series &&
+        record.episode &&
+        isUpgradeImport(
+          Date.parse(record.date),
+          deletions.get(record.episodeId)
+        )
+    );
+    const tvdbIds = [
+      ...new Set(upgrades.map((r) => r.series?.tvdbId).filter(Boolean)),
+    ] as number[];
+    const media = tvdbIds.length
+      ? await mediaRepository
+          .createQueryBuilder('media')
+          .where('media.tvdbId IN (:...tvdbIds)', { tvdbIds })
+          .andWhere('media.mediaType = :mediaType', {
+            mediaType: MediaType.TV,
+          })
+          .getMany()
+      : [];
+    const keyByTvdb = new Map(
+      media.map((m) => [m.tvdbId, m.ratingKey ?? m.ratingKey4k ?? undefined])
+    );
+    for (const record of upgrades) {
+      const series = record.series;
+      const episode = record.episode;
+      if (!series || !episode) {
+        continue;
+      }
+      events.push({
+        kind: 'upgraded',
+        mediaType: 'episode',
+        title: series.title,
+        subtitle: episode.title,
+        season: episode.seasonNumber,
+        episode: episode.episodeNumber,
+        year: series.year,
+        quality: record.quality?.quality?.name,
+        runtime: episode.runtime || series.runtime || undefined,
+        at: Date.parse(record.date),
+        showKey: series.tvdbId ? keyByTvdb.get(series.tvdbId) : undefined,
+      });
+    }
+  }
+
+  return events;
+};
 
 const ratingKeyFromKey = (key?: string): string | undefined =>
   key?.match(/\/library\/metadata\/(\d+)/)?.[1];
@@ -105,27 +274,29 @@ const enrichEvent = async (
   event: FeedEvent
 ): Promise<FeedEvent> => {
   const { itemKey, showKey, ...publicEvent } = event;
-  if (!itemKey) {
+  if (!itemKey && !showKey) {
     return publicEvent;
   }
   const [item, show] = await Promise.all([
-    getCachedMetadata(fetcher, itemKey),
+    itemKey ? getCachedMetadata(fetcher, itemKey) : Promise.resolve(null),
     showKey ? getCachedMetadata(fetcher, showKey) : Promise.resolve(null),
   ]);
-  if (!item) {
-    return publicEvent;
-  }
   // Rating, genres and the IMDb id come from the series for episodes
   const info = show ?? item;
+  if (!info) {
+    return publicEvent;
+  }
   return {
     ...publicEvent,
     year: info.year ?? publicEvent.year,
-    quality: qualityLabel(item),
-    runtime: item.duration ? Math.round(item.duration / 60_000) : undefined,
+    quality: publicEvent.quality ?? (item ? qualityLabel(item) : undefined),
+    runtime:
+      publicEvent.runtime ??
+      (item?.duration ? Math.round(item.duration / 60_000) : undefined),
     imdbId: imdbIdOf(show) ?? imdbIdOf(item),
     rating: info.audienceRating ?? info.rating,
     genres: info.Genre?.slice(0, 3).map((g) => g.tag),
-    art: info.art ?? item.grandparentArt ?? item.art,
+    art: info.art ?? item?.grandparentArt ?? item?.art,
     thumb: publicEvent.thumb ?? info.thumb,
   };
 };
@@ -142,7 +313,14 @@ const buildFeed = async (): Promise<void> => {
   const libraries = settings.plex.libraries.filter((l) => l.enabled);
   const since = Date.now() - 1000 * 60 * 60 * 24 * ARRIVALS_DAYS;
 
-  const [history, accounts, ...libraryItems] = await Promise.all([
+  const [upgrades, history, accounts, ...libraryItems] = await Promise.all([
+    collectUpgrades().catch((e) => {
+      logger.warn('Failed to collect upgrades for feed', {
+        label: 'Feed',
+        errorMessage: e.message,
+      });
+      return [] as FeedEvent[];
+    }),
     plex.plexClient.getWatchHistory(HISTORY_DEPTH),
     plex.plexClient.getServerAccounts().catch(() => new Map<number, string>()),
     ...libraries.map((library) =>
@@ -152,7 +330,7 @@ const buildFeed = async (): Promise<void> => {
     ),
   ]);
 
-  const events: FeedEvent[] = [];
+  const events: FeedEvent[] = [...upgrades];
 
   for (const item of history) {
     const isEpisode = item.type === 'episode';
