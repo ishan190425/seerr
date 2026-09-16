@@ -276,8 +276,8 @@ const Feed = () => {
                   })}
                 </div>
               )}
-              <div className="mt-3 overflow-hidden rounded-r-xl border-l-4 border-indigo-500 bg-indigo-500/10">
-                <div className="px-3 pt-2">
+              <div className="mt-3 w-fit max-w-full overflow-hidden rounded-r-xl border-l-4 border-indigo-500 bg-indigo-500/10">
+                <div className="w-0 min-w-full px-3 pt-2">
                   {imdbUrl ? (
                     <a
                       href={imdbUrl}
@@ -314,7 +314,7 @@ const Feed = () => {
                     href={imdbUrl}
                     target={imdbUrl ? '_blank' : undefined}
                     rel="noreferrer"
-                    className={`block max-h-[50svh] w-full bg-gray-900 ${
+                    className={`block max-h-[50svh] max-w-full ${
                       image === event.thumb ? 'aspect-[2/3]' : 'aspect-video'
                     }`}
                   >
@@ -323,7 +323,7 @@ const Feed = () => {
                       src={plexImage(image)}
                       alt=""
                       loading="lazy"
-                      className="h-full w-full object-contain"
+                      className="h-full w-auto max-w-full object-contain"
                     />
                   </a>
                 )}
