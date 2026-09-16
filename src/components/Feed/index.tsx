@@ -276,8 +276,19 @@ const Feed = () => {
                   })}
                 </div>
               )}
-              <div className="mt-3 w-fit max-w-full overflow-hidden rounded-r-xl border-l-4 border-indigo-500 bg-indigo-500/10">
-                <div className="w-0 min-w-full px-3 pt-2">
+              <div
+                className="mt-3 max-w-full overflow-hidden rounded-r-xl border-l-4 border-indigo-500 bg-indigo-500/10"
+                style={{
+                  // Block width = the artwork's width at half the screen height,
+                  // never wider than the card, so there are no bands beside it
+                  width: image
+                    ? `min(100%, calc(50svh * ${
+                        image === event.thumb ? '2 / 3' : '16 / 9'
+                      }))`
+                    : undefined,
+                }}
+              >
+                <div className="px-3 pt-2">
                   {imdbUrl ? (
                     <a
                       href={imdbUrl}
@@ -314,7 +325,7 @@ const Feed = () => {
                     href={imdbUrl}
                     target={imdbUrl ? '_blank' : undefined}
                     rel="noreferrer"
-                    className={`block max-h-[50svh] max-w-full ${
+                    className={`block w-full ${
                       image === event.thumb ? 'aspect-[2/3]' : 'aspect-video'
                     }`}
                   >
@@ -323,7 +334,7 @@ const Feed = () => {
                       src={plexImage(image)}
                       alt=""
                       loading="lazy"
-                      className="h-full w-auto max-w-full object-contain"
+                      className="h-full w-full object-cover"
                     />
                   </a>
                 )}
