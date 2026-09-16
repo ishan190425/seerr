@@ -47,6 +47,7 @@ interface FeedEvent {
   episode?: number;
   year?: number;
   quality?: string;
+  previousQuality?: string;
   runtime?: number;
   imdbId?: string;
   rating?: number;
@@ -106,7 +107,14 @@ const detailLine = (event: FeedEvent): string => {
     parts[0] = `${event.title} (${event.year})`;
   }
   const line = parts.join(' - ');
-  return event.quality ? `${line} [${event.quality}]` : line;
+  if (!event.quality) {
+    return line;
+  }
+  const quality =
+    event.previousQuality && event.previousQuality !== event.quality
+      ? `${event.previousQuality} \u2192 ${event.quality}`
+      : event.quality;
+  return `${line} [${quality}]`;
 };
 
 const PAGE_SIZE = 20;

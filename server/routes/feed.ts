@@ -27,6 +27,7 @@ export interface FeedEvent {
   episode?: number;
   year?: number;
   quality?: string;
+  previousQuality?: string;
   runtime?: number;
   imdbId?: string;
   rating?: number;
@@ -51,16 +52,18 @@ const METADATA_CACHE_MAX = 5000;
 // that reason shortly before it
 const UPGRADE_WINDOW_MS = 30 * 60_000;
 
-const isUpgradeImport = (
+interface Deletion {
+  at: number;
+  quality?: string;
+}
+
+// Returns the deletion that this import replaced, if any
+const matchUpgrade = (
   importedAt: number,
-  deletions: number[] | undefined
-): boolean =>
-  Boolean(
-    deletions?.some(
-      (deletedAt) =>
-        deletedAt <= importedAt + 60_000 &&
-        importedAt - deletedAt < UPGRADE_WINDOW_MS
-    )
+  deletions: Deletion[] | undefined
+): Deletion | undefined =>
+  deletions?.find(
+    ({ at }) => at <= importedAt + 60_000 && importedAt - at < UPGRADE_WINDOW_MS
   );
 
 /**
@@ -97,7 +100,7 @@ const collectUpgrades = async (): Promise<FeedEvent[]> => {
   const mediaRepository = getRepository(Media);
 
   for (const records of radarrResults) {
-    const deletions = new Map<number, number[]>();
+    const deletions = new Map<number, Deletion[]>();
     for (const record of records) {
       if (
         record.eventType === 'movieFileDeleted' &&
@@ -105,18 +108,30 @@ const collectUpgrades = async (): Promise<FeedEvent[]> => {
       ) {
         deletions.set(record.movieId, [
           ...(deletions.get(record.movieId) ?? []),
-          Date.parse(record.date),
+          {
+            at: Date.parse(record.date),
+            quality: record.quality?.quality?.name,
+          },
         ]);
       }
     }
-    const upgrades = records.filter(
-      (record) =>
-        record.eventType === 'downloadFolderImported' &&
-        record.movie &&
-        isUpgradeImport(Date.parse(record.date), deletions.get(record.movieId))
-    );
+    const upgrades = records
+      .filter(
+        (record) =>
+          record.eventType === 'downloadFolderImported' && record.movie
+      )
+      .map((record) => ({
+        record,
+        replaced: matchUpgrade(
+          Date.parse(record.date),
+          deletions.get(record.movieId)
+        ),
+      }))
+      .filter(({ replaced }) => replaced);
     const tmdbIds = [
-      ...new Set(upgrades.map((r) => r.movie?.tmdbId).filter(Boolean)),
+      ...new Set(
+        upgrades.map(({ record }) => record.movie?.tmdbId).filter(Boolean)
+      ),
     ] as number[];
     const media = tmdbIds.length
       ? await mediaRepository
@@ -130,7 +145,7 @@ const collectUpgrades = async (): Promise<FeedEvent[]> => {
     const keyByTmdb = new Map(
       media.map((m) => [m.tmdbId, m.ratingKey ?? m.ratingKey4k ?? undefined])
     );
-    for (const record of upgrades) {
+    for (const { record, replaced } of upgrades) {
       const movie = record.movie;
       if (!movie) {
         continue;
@@ -141,6 +156,7 @@ const collectUpgrades = async (): Promise<FeedEvent[]> => {
         title: movie.title,
         year: movie.year,
         quality: record.quality?.quality?.name,
+        previousQuality: replaced?.quality,
         runtime: movie.runtime || undefined,
         at: Date.parse(record.date),
         itemKey: movie.tmdbId ? keyByTmdb.get(movie.tmdbId) : undefined,
@@ -149,7 +165,7 @@ const collectUpgrades = async (): Promise<FeedEvent[]> => {
   }
 
   for (const records of sonarrResults) {
-    const deletions = new Map<number, number[]>();
+    const deletions = new Map<number, Deletion[]>();
     for (const record of records) {
       if (
         record.eventType === 'episodeFileDeleted' &&
@@ -157,22 +173,32 @@ const collectUpgrades = async (): Promise<FeedEvent[]> => {
       ) {
         deletions.set(record.episodeId, [
           ...(deletions.get(record.episodeId) ?? []),
-          Date.parse(record.date),
+          {
+            at: Date.parse(record.date),
+            quality: record.quality?.quality?.name,
+          },
         ]);
       }
     }
-    const upgrades = records.filter(
-      (record) =>
-        record.eventType === 'downloadFolderImported' &&
-        record.series &&
-        record.episode &&
-        isUpgradeImport(
+    const upgrades = records
+      .filter(
+        (record) =>
+          record.eventType === 'downloadFolderImported' &&
+          record.series &&
+          record.episode
+      )
+      .map((record) => ({
+        record,
+        replaced: matchUpgrade(
           Date.parse(record.date),
           deletions.get(record.episodeId)
-        )
-    );
+        ),
+      }))
+      .filter(({ replaced }) => replaced);
     const tvdbIds = [
-      ...new Set(upgrades.map((r) => r.series?.tvdbId).filter(Boolean)),
+      ...new Set(
+        upgrades.map(({ record }) => record.series?.tvdbId).filter(Boolean)
+      ),
     ] as number[];
     const media = tvdbIds.length
       ? await mediaRepository
@@ -186,7 +212,7 @@ const collectUpgrades = async (): Promise<FeedEvent[]> => {
     const keyByTvdb = new Map(
       media.map((m) => [m.tvdbId, m.ratingKey ?? m.ratingKey4k ?? undefined])
     );
-    for (const record of upgrades) {
+    for (const { record, replaced } of upgrades) {
       const series = record.series;
       const episode = record.episode;
       if (!series || !episode) {
@@ -201,6 +227,7 @@ const collectUpgrades = async (): Promise<FeedEvent[]> => {
         episode: episode.episodeNumber,
         year: series.year,
         quality: record.quality?.quality?.name,
+        previousQuality: replaced?.quality,
         runtime: episode.runtime || series.runtime || undefined,
         at: Date.parse(record.date),
         showKey: series.tvdbId ? keyByTvdb.get(series.tvdbId) : undefined,
