@@ -248,32 +248,30 @@ const Feed = () => {
                   })}
                 </div>
               )}
-              {imdbUrl && (
-                <a
-                  href={imdbUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 inline-block text-base font-medium text-indigo-400 hover:text-indigo-300 hover:underline"
-                >
-                  IMDb
-                </a>
-              )}
               <div className="mt-3 overflow-hidden rounded-r-xl border-l-4 border-indigo-500 bg-indigo-500/10">
                 <div className="px-3 pt-2">
-                  <div className="text-sm font-bold text-indigo-400">IMDb</div>
-                  <div className="text-base font-semibold text-gray-100">
-                    {event.title}{' '}
-                    <span className="font-normal text-gray-300">
-                      (
-                      {intl.formatMessage(
-                        isEpisode ? messages.tvseries : messages.movie
-                      )}
-                      {event.year ? ` ${event.year}` : ''}
-                      {isEpisode ? '\u2013 ' : ''})
-                    </span>
-                    {meta && (
-                      <span className="font-normal text-gray-200"> {meta}</span>
+                  {imdbUrl ? (
+                    <a
+                      href={imdbUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm font-bold text-indigo-400 hover:underline"
+                    >
+                      IMDb
+                    </a>
+                  ) : (
+                    <div className="text-sm font-bold text-indigo-400">
+                      IMDb
+                    </div>
+                  )}
+                  <div className="text-base text-gray-100">
+                    {intl.formatMessage(
+                      isEpisode ? messages.tvseries : messages.movie
                     )}
+                    {event.year
+                      ? ` (${event.year}${isEpisode ? '\u2013' : ''})`
+                      : ''}
+                    {meta && <span className="text-gray-200"> {meta}</span>}
                   </div>
                   {event.runtime ? (
                     <div className="pb-2 text-sm text-gray-300">
