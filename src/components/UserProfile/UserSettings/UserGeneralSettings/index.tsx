@@ -59,6 +59,9 @@ const messages = defineMessages(
     startPageTv: 'Series',
     startPageRequests: 'Requests',
     startPageFeed: 'Feed',
+    feedDays: 'Feed History',
+    feedDaysTip: 'How far back the Feed goes',
+    feedDaysOption: '{days, plural, one {# day} other {# days}}',
     originallanguage: 'Discover Language',
     originallanguageTip: 'Filter content by original language',
     streamingRegion: 'Streaming Region',
@@ -86,6 +89,8 @@ const START_PAGES = [
   { path: '/requests', label: messages.startPageRequests },
   { path: '/feed', label: messages.startPageFeed },
 ];
+
+const FEED_DAY_OPTIONS = [1, 2, 3, 7, 14, 30, 90];
 
 const UserGeneralSettings = () => {
   const intl = useIntl();
@@ -169,6 +174,7 @@ const UserGeneralSettings = () => {
           locale: data?.locale,
           discoverRegion: data?.discoverRegion,
           startPage: data?.startPage ?? '',
+          feedDays: data?.feedDays ?? 1,
           streamingRegion: data?.streamingRegion,
           originalLanguage: data?.originalLanguage,
           movieQuotaLimit: data?.movieQuotaLimit,
@@ -189,6 +195,7 @@ const UserGeneralSettings = () => {
               locale: values.locale,
               discoverRegion: values.discoverRegion,
               startPage: values.startPage || null,
+              feedDays: Number(values.feedDays) || 1,
               streamingRegion: values.streamingRegion,
               originalLanguage: values.originalLanguage,
               movieQuotaLimit: movieQuotaEnabled
@@ -392,6 +399,27 @@ const UserGeneralSettings = () => {
                       {START_PAGES.map((page) => (
                         <option key={page.path} value={page.path}>
                           {intl.formatMessage(page.label)}
+                        </option>
+                      ))}
+                    </Field>
+                  </div>
+                </div>
+              </div>
+              <div className="form-row">
+                <label htmlFor="feedDays" className="text-label">
+                  <span>{intl.formatMessage(messages.feedDays)}</span>
+                  <span className="label-tip">
+                    {intl.formatMessage(messages.feedDaysTip)}
+                  </span>
+                </label>
+                <div className="form-input-area">
+                  <div className="form-input-field">
+                    <Field as="select" id="feedDays" name="feedDays">
+                      {FEED_DAY_OPTIONS.map((days) => (
+                        <option key={days} value={days}>
+                          {intl.formatMessage(messages.feedDaysOption, {
+                            days,
+                          })}
                         </option>
                       ))}
                     </Field>

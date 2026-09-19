@@ -45,6 +45,7 @@ let building: Promise<void> | null = null;
 const FEED_CACHE_TTL = 60_000;
 const HISTORY_DEPTH = 1000;
 const ARRIVALS_DAYS = 120;
+const DEFAULT_FEED_DAYS = 1;
 
 // Item metadata rarely changes, so cache it for a long time keyed by ratingKey
 const metadataCache = new Map<string, Promise<PlexMetadata | null>>();
@@ -470,7 +471,15 @@ feedRoutes.get('/', async (req, res) => {
 
     const offset = Math.max(0, Number(req.query.offset) || 0);
     const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
-    const page = cachedFeed.slice(offset, offset + limit);
+
+    // Only show as much history as the user asked for (1 day by default)
+    const feedDays = Math.max(
+      1,
+      Number(req.user?.settings?.feedDays) || DEFAULT_FEED_DAYS
+    );
+    const cutoff = Date.now() - feedDays * 24 * 60 * 60_000;
+    const visible = cachedFeed.filter((event) => event.at >= cutoff);
+    const page = visible.slice(offset, offset + limit);
 
     // Enrich only the requested page; metadata is cached across requests
     const plex = await getAdminPlex();
@@ -485,8 +494,8 @@ feedRoutes.get('/', async (req, res) => {
     return res.status(200).json({
       events,
       offset,
-      total: cachedFeed.length,
-      hasMore: offset + limit < cachedFeed.length,
+      total: visible.length,
+      hasMore: offset + limit < visible.length,
     });
   } catch (e) {
     logger.error('Failed to build feed', {

@@ -161,6 +161,11 @@ components:
           nullable: true
           description: 'Page the app opens to (path, e.g. /feed)'
           example: '/feed'
+        feedDays:
+          type: number
+          nullable: true
+          description: 'How many days of history the Feed shows (default 1)'
+          example: 1
         streamingRegion:
           type: string
           nullable: true

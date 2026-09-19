@@ -6,6 +6,7 @@ export interface UserSettingsGeneralResponse {
   locale?: string;
   discoverRegion?: string;
   startPage?: string;
+  feedDays?: number;
   streamingRegion?: string;
   originalLanguage?: string;
   movieQuotaLimit?: number;

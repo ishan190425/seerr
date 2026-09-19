@@ -50,6 +50,9 @@ export class UserSettings {
   public startPage?: string;
 
   @Column({ nullable: true })
+  public feedDays?: number;
+
+  @Column({ nullable: true })
   public streamingRegion?: string;
 
   @Column({ nullable: true })

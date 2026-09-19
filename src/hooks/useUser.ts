@@ -31,6 +31,7 @@ type NotificationAgentTypes = Record<NotificationAgentKey, number>;
 export interface UserSettings {
   discoverRegion?: string;
   startPage?: string;
+  feedDays?: number;
   streamingRegion?: string;
   originalLanguage?: string;
   locale?: string;
