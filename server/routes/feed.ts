@@ -25,6 +25,8 @@ export interface FeedEvent {
   // Enriched, notification-style fields (filled in per page)
   season?: number;
   episode?: number;
+  /** All episode numbers when several episodes were grouped into one event */
+  episodes?: number[];
   year?: number;
   quality?: string;
   previousQuality?: string;
@@ -319,7 +321,9 @@ const enrichEvent = async (
     quality: publicEvent.quality ?? (item ? qualityLabel(item) : undefined),
     runtime:
       publicEvent.runtime ??
-      (item?.duration ? Math.round(item.duration / 60_000) : undefined),
+      (item?.duration && !publicEvent.episodes
+        ? Math.round(item.duration / 60_000)
+        : undefined),
     imdbId: imdbIdOf(show) ?? imdbIdOf(item),
     rating: info.audienceRating ?? info.rating,
     genres: info.Genre?.slice(0, 3).map((g) => g.tag),
@@ -396,8 +400,64 @@ const buildFeed = async (): Promise<void> => {
   }
 
   events.sort((a, b) => b.at - a.at);
-  cachedFeed = events;
+  cachedFeed = groupEpisodeBatches(events);
   cachedFeedAt = Date.now();
+};
+
+// Episodes of the same show/season downloaded or upgraded within this window
+// of each other collapse into a single "12x01-12" event
+const BATCH_WINDOW_MS = 3 * 60 * 60_000;
+
+const groupEpisodeBatches = (sorted: FeedEvent[]): FeedEvent[] => {
+  const result: FeedEvent[] = [];
+  // key -> group (open while new events keep landing inside the window)
+  const open = new Map<string, { event: FeedEvent; earliest: number }>();
+
+  for (const event of sorted) {
+    const groupable =
+      (event.kind === 'added' || event.kind === 'upgraded') &&
+      event.mediaType === 'episode' &&
+      event.season != null &&
+      event.episode != null;
+    if (!groupable) {
+      result.push(event);
+      continue;
+    }
+    const key = `${event.kind}|${event.title}|${event.season}`;
+    const group = open.get(key);
+    // Events are newest-first, so a match must lie within the window of
+    // the group's earliest member
+    if (group && group.earliest - event.at < BATCH_WINDOW_MS) {
+      const first = group.event;
+      first.episodes = [...(first.episodes ?? [first.episode as number])];
+      if (!first.episodes.includes(event.episode as number)) {
+        first.episodes.push(event.episode as number);
+      }
+      if (first.quality !== event.quality) {
+        first.quality = undefined;
+      }
+      if (first.previousQuality !== event.previousQuality) {
+        first.previousQuality = undefined;
+      }
+      group.earliest = event.at;
+      continue;
+    }
+    const copy: FeedEvent = { ...event };
+    result.push(copy);
+    open.set(key, { event: copy, earliest: event.at });
+  }
+
+  for (const event of result) {
+    if (event.episodes && event.episodes.length > 1) {
+      event.episodes.sort((a, b) => a - b);
+      // A batch has no single episode title or runtime
+      event.subtitle = undefined;
+      event.runtime = undefined;
+    } else {
+      delete event.episodes;
+    }
+  }
+  return result;
 };
 
 feedRoutes.get('/', async (req, res) => {

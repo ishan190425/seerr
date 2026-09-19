@@ -25,6 +25,8 @@ const messages = defineMessages('components.Feed', {
   itemUpgraded: 'Upgraded',
   caughtup: "You're all caught up",
   episodeDownloaded: 'Episode Downloaded',
+  episodesDownloaded: 'Episodes Downloaded',
+  episodesUpgraded: 'Episodes Upgraded',
   movieDownloaded: 'Movie Downloaded',
   episodeWatched: 'Episode Watched',
   movieWatched: 'Movie Watched',
@@ -45,6 +47,7 @@ interface FeedEvent {
   thumb?: string;
   season?: number;
   episode?: number;
+  episodes?: number[];
   year?: number;
   quality?: string;
   previousQuality?: string;
@@ -69,9 +72,30 @@ const formatRuntime = (minutes: number): string => {
   return h ? `${h}h` : `${m}m`;
 };
 
+// [1, 2, 3, 5] -> "01-03, 05"
+const episodeRanges = (episodes: number[]): string => {
+  const runs: string[] = [];
+  let start = episodes[0];
+  let prev = episodes[0];
+  for (const n of episodes.slice(1).concat(NaN)) {
+    if (n !== prev + 1) {
+      runs.push(start === prev ? pad2(start) : `${pad2(start)}-${pad2(prev)}`);
+      start = n;
+    }
+    prev = n;
+  }
+  return runs.join(', ');
+};
+
 const headlineFor = (event: FeedEvent) => {
   const isEpisode = event.mediaType === 'episode';
   const isMovie = event.mediaType === 'movie';
+  const isBatch = Boolean(event.episodes && event.episodes.length > 1);
+  if (isBatch) {
+    return event.kind === 'upgraded'
+      ? messages.episodesUpgraded
+      : messages.episodesDownloaded;
+  }
   if (event.kind === 'upgraded') {
     return isEpisode
       ? messages.episodeUpgraded
@@ -97,7 +121,9 @@ const headlineFor = (event: FeedEvent) => {
 const detailLine = (event: FeedEvent): string => {
   const parts: string[] = [event.title];
   if (event.mediaType === 'episode') {
-    if (event.season != null && event.episode != null) {
+    if (event.season != null && event.episodes && event.episodes.length > 1) {
+      parts.push(`${event.season}x${episodeRanges(event.episodes)}`);
+    } else if (event.season != null && event.episode != null) {
       parts.push(`${event.season}x${pad2(event.episode)}`);
     }
     if (event.subtitle) {
